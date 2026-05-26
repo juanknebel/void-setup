@@ -1,0 +1,92 @@
+{
+    "layer": "top",
+    "position": "top",
+    "height": 36,
+    "spacing": 0,
+    "margin-top": 10,
+    "margin-left": 14,
+    "margin-right": 14,
+    "modules-left": ["sway/workspaces", "sway/mode"],
+    "modules-center": ["clock"],
+    "modules-right": [
+        "temperature", "cpu", "memory",
+        "custom/sep",
+        "backlight", "pulseaudio",
+        "custom/sep",
+        "network", "bluetooth",
+        "custom/sep",
+        "battery",
+        "tray"
+    ],
+    "sway/workspaces": {
+        "disable-scroll": true,
+        "all-outputs": true,
+        "format": "{name}"
+    },
+    "clock": {
+        "timezone": "America/Argentina/Buenos_Aires",
+        "format": "󰥔 {:%H:%M}",
+        "format-alt": "󰸗 {:%a %d %b}",
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
+    },
+    "cpu": {
+        "interval": 5,
+        "format": "󰍛 {usage}%",
+        "tooltip": false
+    },
+    "memory": {
+        "interval": 5,
+        "format": " {percentage}%",
+        "tooltip-format": "{used:0.1f} GiB / {total:0.1f} GiB"
+    },
+    "temperature": {
+        "interval": 5,
+        "thermal-zone": 0,
+        "critical-threshold": 80,
+        "format": "󰔏 {temperatureC}°",
+        "format-critical": "󰸁 {temperatureC}°"
+    },
+    "network": {
+        "format-wifi": "󰖩 {essid}",
+        "format-ethernet": "󰈀 {ifname}",
+        "format-disconnected": "󰖪",
+        "tooltip-format": "{ifname}: {ipaddr}/{cidr} ({signalStrength}%)",
+        "on-click": "foot --app-id=foot-nmtui -e nmtui"
+    },
+    "bluetooth": {
+        "format-on": "󰂯",
+        "format-connected": "󰂱 {device_alias}",
+        "format-disabled": "󰂲",
+        "format-off": "󰂲",
+        "tooltip-format": "{controller_alias}\t{controller_address}",
+        "tooltip-format-connected": "{device_enumerate}",
+        "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}",
+        "on-click": "foot --app-id=foot-bluetui -e bluetui"
+    },
+    "backlight": {
+        "format": "󰃟 {percent}%",
+        "scroll-step": 5
+    },
+    "pulseaudio": {
+        "format": "{icon} {volume}%",
+        "format-muted": "󰝟",
+        "format-icons": {
+            "default": ["󰕿", "󰖀", "󰕾"]
+        },
+        "on-click": "foot --app-id=foot-pulsemixer -e pulsemixer"
+    },
+    "battery": {
+        "states": { "warning": 30, "critical": 15 },
+        "format": "{icon} {capacity}%",
+        "format-charging": "󰂄 {capacity}%",
+        "format-plugged": "󰚥 {capacity}%",
+        "format-icons": ["󰂎", "󰁺", "󰁻", "󰁼", "󰁽", "󰁾", "󰁿", "󰂀", "󰂁", "󰂂", "󰁹"]
+    },
+    "custom/sep": {
+        "format": "",
+        "tooltip": false
+    },
+    "tray": {
+        "spacing": 8
+    }
+}

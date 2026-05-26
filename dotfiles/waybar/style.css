@@ -1,0 +1,85 @@
+/* Breeze Dark — floating + Nerd Font + per-module accent.
+   Palette consistent with alacritty.toml and dotfiles/sway/config. */
+
+* {
+    font-family: "JetBrainsMono Nerd Font", "Noto Sans", sans-serif;
+    font-size: 13px;
+    min-height: 0;
+}
+
+/* Floating bar with rounded corners, subtle border, and shadow for depth.
+   The actual margins live in the JSON config (margin-top/left/right). */
+window#waybar {
+    background-color: rgba(35, 38, 41, 0.95);   /* #232629 = Breeze Dark View bg, 95% opacity */
+    color: #eff0f1;
+    border-radius: 14px;
+    border: 1px solid #4d4d4d;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+/* Workspaces — accent on focused. */
+#workspaces {
+    padding: 0 4px;
+}
+#workspaces button {
+    padding: 2px 9px;
+    margin: 4px 2px;
+    background-color: transparent;
+    color: #7f8c8d;
+    border-radius: 6px;
+    border-bottom: 2px solid transparent;
+}
+#workspaces button.focused {
+    background-color: rgba(61, 174, 233, 0.15);
+    color: #3daee9;
+    border-bottom: 2px solid #3daee9;
+}
+#workspaces button:hover {
+    background-color: rgba(61, 174, 233, 0.08);
+    color: #3daee9;
+    box-shadow: none;
+}
+
+/* Common padding for all modules. */
+#clock,
+#cpu,
+#memory,
+#temperature,
+#network,
+#bluetooth,
+#pulseaudio,
+#backlight,
+#battery,
+#tray {
+    padding: 0 10px;
+}
+
+/* Per-module accent color (more nerd, less uniform). */
+#clock        { color: #eff0f1; }
+#temperature  { color: #1abc9c; }   /* cyan */
+#cpu          { color: #f67400; }   /* orange */
+#memory       { color: #9b59b6; }   /* purple */
+#backlight    { color: #fdbc4b; }   /* yellow */
+#pulseaudio   { color: #fdbc4b; }   /* yellow */
+#network      { color: #3daee9; }   /* breeze blue */
+#bluetooth    { color: #1d99f3; }   /* blue */
+#battery      { color: #11d116; }   /* green */
+
+/* Alert states — override the base color. */
+#battery.warning              { color: #fdbc4b; }
+#battery.critical:not(.charging) { color: #ed1515; }
+#network.disconnected         { color: #ed1515; }
+#bluetooth.off,
+#bluetooth.disabled           { color: #7f8c8d; }
+#temperature.critical         { color: #ed1515; }
+
+/* Powerline separators — `` (thin diagonal) between module groups. */
+#custom-sep {
+    color: #4d4d4d;
+    padding: 0 3px;
+    font-size: 18px;
+}
+
+#tray {
+    padding: 0 8px;
+}

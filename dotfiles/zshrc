@@ -1,0 +1,85 @@
+# ~/.zshrc — lightweight setup without Oh My Zsh
+# Void Linux / ThinkPad X220 Tablet
+
+# ---------------------------------------------------------------------------
+# History
+# ---------------------------------------------------------------------------
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=50000
+SAVEHIST=50000
+setopt HIST_IGNORE_ALL_DUPS      # do not store duplicates
+setopt HIST_IGNORE_SPACE         # commands starting with a space are not stored
+setopt HIST_REDUCE_BLANKS        # collapse redundant whitespace
+setopt SHARE_HISTORY             # share history across sessions
+setopt INC_APPEND_HISTORY        # append to history immediately
+
+# ---------------------------------------------------------------------------
+# General behavior
+# ---------------------------------------------------------------------------
+setopt AUTO_CD                   # implicit cd: typing a dir name enters it
+setopt CORRECT                   # correct command typos
+setopt INTERACTIVE_COMMENTS      # allow # comments on the interactive line
+setopt NO_BEEP                   # no terminal bell
+
+# ---------------------------------------------------------------------------
+# Completion
+# ---------------------------------------------------------------------------
+autoload -Uz compinit
+compinit
+zstyle ':completion:*' menu select                       # arrow-key navigable menu
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' # case-insensitive
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"  # colors in the menu
+
+# ---------------------------------------------------------------------------
+# Plugins (Void paths under /usr/share/zsh/plugins/)
+# ---------------------------------------------------------------------------
+# Autosuggestions: suggest commands from history (grey text, accept with ->)
+source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+source /usr/share/zsh/plugins/zsh-history-substring-search/zsh-history-substring-search.zsh
+
+# Syntax highlighting: colorizes commands as you type
+# IMPORTANT: must be sourced at the END of .zshrc (after everything else);
+# done further down.
+
+# ---------------------------------------------------------------------------
+# Keybindings
+# ---------------------------------------------------------------------------
+bindkey -e                                    # emacs mode (Ctrl+A, Ctrl+E, etc.)
+bindkey '^[[A' history-substring-search-up    # Up: prefix-search history
+bindkey '^[[B' history-substring-search-down  # Down: same
+bindkey '^[[H' beginning-of-line              # Home
+bindkey '^[[F' end-of-line                    # End
+bindkey '^[[3~' delete-char                   # Del
+
+# ---------------------------------------------------------------------------
+# Aliases
+# ---------------------------------------------------------------------------
+alias ls='ls --color=auto'
+alias ll='ls -lah'
+alias la='ls -A'
+alias grep='grep --color=auto'
+alias df='df -h'
+alias free='free -h'
+alias ..='cd ..'
+alias ...='cd ../..'
+
+# xbps (Void) — convenience shortcuts
+alias xi='sudo xbps-install -S'        # install
+alias xr='sudo xbps-remove -R'         # remove with orphan deps
+alias xq='xbps-query -Rs'              # search
+alias xu='sudo xbps-install -Su'       # update system
+
+# ---------------------------------------------------------------------------
+# PATH
+# ---------------------------------------------------------------------------
+export PATH="$HOME/.local/bin:$PATH"
+
+# ---------------------------------------------------------------------------
+# Prompt: Starship
+# ---------------------------------------------------------------------------
+eval "$(starship init zsh)"
+
+# ---------------------------------------------------------------------------
+# Syntax highlighting — ALWAYS last
+# ---------------------------------------------------------------------------
+source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh

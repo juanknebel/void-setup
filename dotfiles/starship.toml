@@ -1,0 +1,67 @@
+# ~/.config/starship.toml — Nord theme, requires a Nerd Font (already installed)
+
+# Two-line prompt with a continuation character
+add_newline = true
+format = """
+$directory\
+$git_branch\
+$git_status\
+$rust\
+$golang\
+$python\
+$nodejs\
+$cmd_duration\
+$line_break\
+$character"""
+
+# --- Current directory ---
+[directory]
+style = "bold blue"
+truncation_length = 3
+truncate_to_repo = true
+read_only = " "
+
+# --- Git ---
+[git_branch]
+symbol = " "
+style = "bold purple"
+
+[git_status]
+style = "bold yellow"
+conflicted = "✗"
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
+untracked = "?${count}"
+modified = "!${count}"
+staged = "+${count}"
+stashed = "≡"
+
+# --- Languages (shown only inside projects that use them) ---
+[rust]
+symbol = " "
+style = "bold red"
+
+[golang]
+symbol = " "
+style = "bold cyan"
+
+[python]
+symbol = " "
+style = "bold green"
+
+[nodejs]
+symbol = " "
+style = "bold green"
+
+# --- Long-running commands ---
+[cmd_duration]
+min_time = 2000
+format = "took [$duration]($style) "
+style = "bold yellow"
+
+# --- Prompt character (color changes with success/error) ---
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+vimcmd_symbol = "[❮](bold green)"
