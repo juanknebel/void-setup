@@ -122,7 +122,7 @@ triggers them.
 - **Map the bezel rotation button** — System Settings → Shortcuts →
   Custom Shortcuts → New → Global Shortcut → Command/URL. Trigger:
   press the bezel rotation button (captures `XF86TaskPane`). Action:
-  `/home/zero/.local/bin/rotate_screen_twm.sh`. (In Sway this binding
+  `~/.local/bin/rotate_screen_twm.sh`. (In Sway this binding
   is already in `dotfiles/sway/config` — no GUI step needed.)
 - ⚠️ **NEVER set `DisplayServer=wayland`** in any
   `/etc/sddm.conf.d/*.conf` — this has fully hung the X220 in the past
