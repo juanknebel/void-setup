@@ -8,25 +8,68 @@ Provisioning + dotfiles for a **ThinkPad X220 Tablet running Void Linux + Sway (
 
 ## Common commands
 
-Both setup scripts are idempotent and support `--dry-run` for previews. There are **no build/lint/test commands** — this is a config repo.
+All setup scripts are idempotent and support `--dry-run` for previews. There are **no build/lint/test commands** — this is a config repo.
+
+The scripts are deliberately modular so you can build either a Sway box, a Plasma box, or both — pick which to run, none are mandatory beyond `setup-base.sh`.
 
 ```bash
-./setup-system.sh --dry-run    # preview system changes
-./setup-system.sh              # apply (xbps packages, runit services, zram, SDDM, env vars)
-./setup-dotfiles.sh --dry-run  # preview user-config changes
-./setup-dotfiles.sh            # apply (copies dotfiles/ + images/ into $HOME)
+# Pre-install (run only on a fresh disk, from the live ISO; needs root)
+./setup-disk.sh /dev/sda          # interactive cfdisk + automated mkfs/mount
+
+# After void-installer + first boot
+./setup-base.sh                   # common base (NM, SDDM, audio, BT, fonts, Qt theming, shell, CLI)
+
+# Pick your desktop(s) — both can coexist
+./setup-sway.sh                   # sway compositor + helpers (waybar, fuzzel, mako, foot, screenshots)
+./setup-plasma.sh                 # KDE Plasma desktop + applets + extras
+
+# User configs (copies dotfiles/ + images/ into $HOME; sway-focused)
+./setup-dotfiles.sh
+
+# Optional add-ons
+./setup-zram.sh                   # zram swap (zstd, 50%, prio 32767) + swappiness=100
+                                  #   --with-swapfile also creates /swapfile (pri=10) as OOM backstop
+./setup-fingerprint.sh            # fprintd + libfprint, probes UPEK reader (147e:2016)
+./setup-virtualkb.sh              # Maliit for Plasma; --enable-sddm also wires greeter vkbd
+./setup-voidsplash.sh             # framebuffer boot splash via runit
+                                  #   --grub-quiet also adds console=tty2 to GRUB cmdline
 ```
+
+Every script supports `-d/--dry-run` and `-h/--help`.
 
 ## Architecture
 
-Two-script split:
+The repo is a layered set of standalone scripts. Each script is independently runnable and idempotent. The layers form a dependency chain:
 
-- **`setup-system.sh`** = system-level (needs sudo). Installs xbps packages, sets up runit service symlinks, writes `/etc/sv/zramen/conf` via heredoc, configures SDDM theme, links PipeWire system configs, appends `QT_QPA_PLATFORMTHEME=qt6ct` to `/etc/environment`.
-- **`setup-dotfiles.sh`** = user-level (no sudo). Copies payload from `dotfiles/` and `images/` into `~/.config/`, `~/.local/bin/`, `~/Pictures/`.
+```
+setup-disk.sh         (pre-install, in live ISO)
+       ↓
+   [void-installer, reboot]
+       ↓
+setup-base.sh         (common system: NM/SDDM/audio/BT/fonts/Qt/shell/CLI)
+       ↓                                   ↓
+setup-sway.sh                     setup-plasma.sh   (pick one or both)
+       ↓                                   ↓
+setup-dotfiles.sh                 [Plasma GUI config]
+       ↓
+[optional add-ons: setup-zram.sh, setup-fingerprint.sh,
+                   setup-virtualkb.sh, setup-voidsplash.sh]
+```
 
-The dotfiles installer uses a **mirror-of-destination layout**: `dotfiles/sway/config` → `~/.config/sway/config`, `dotfiles/local/bin/powermenu.sh` → `~/.local/bin/powermenu.sh`. The `install_file` helper takes absolute src paths; callers build them from `$DOTFILES_DIR` or `$IMAGES_DIR`. Backups of overwritten files go to `<path>.bak.<timestamp>`.
+Per-script responsibilities:
 
-When extending the installer with a new payload source (other than `dotfiles/` and `images/`), define a new `*_DIR` variable at the top and pass `"$NEW_DIR/relpath"` to `install_file` — don't duplicate the helper.
+- **`setup-disk.sh`** = pre-install only. Takes a target device, runs cfdisk interactively, then automates mkfs.vfat (ESP) + mkfs.ext4 (root) + mount under `/mnt`. Has strict guard rails: refuses if any partition on the target is mounted, requires root (no sudo in live ISO), requires explicit `yes` confirmation before mkfs.
+- **`setup-base.sh`** = system foundation shared by both DEs (needs sudo). Installs xbps packages for NM/SDDM/audio/BT/input/fonts/shell/CLI/Qt-theming, sets up runit service symlinks, configures SDDM theme to Breeze, links PipeWire system configs + user autostart, appends `QT_QPA_PLATFORMTHEME=qt6ct` to `/etc/environment`, cleans up stale dhcpcd. Other DE/optional scripts validate its prerequisites and bail with a clear error if missing.
+- **`setup-sway.sh`** / **`setup-plasma.sh`** = compositor/DE additions. Both validate base prerequisites first. Sway adds the wlroots stack + helpers (waybar, fuzzel, mako, screenshots tooling). Plasma adds the Plasma 6 stack + KDE apps. Both can be installed side-by-side and selected from the SDDM session menu.
+- **`setup-dotfiles.sh`** = user-level (no sudo). Copies payload from `dotfiles/` and `images/` into `~/.config/`, `~/.local/bin/`, `~/Pictures/`. Sway-focused (the dotfiles assume Sway; Plasma users configure via GUI). Uses a mirror-of-destination layout where `install_file` takes absolute src paths from `$DOTFILES_DIR` or `$IMAGES_DIR`; backups go to `<path>.bak.<timestamp>`.
+- **`setup-zram.sh`** = optional. Installs zramen, writes `/etc/sv/zramen/conf` via heredoc (zstd / 50% / priority 32767), links the runit service, writes `vm.swappiness=100`. `--with-swapfile` additionally creates `/swapfile` at priority 10 as an anti-OOM backstop (zram fills first).
+- **`setup-fingerprint.sh`** = optional UPEK setup. Installs fprintd/libfprint, probes USB ID `147e:2016`, reports enrollment status. PAM integration intentionally NOT scripted — manual opt-in with mandatory `sufficient` semantics (CVE-2024-37408).
+- **`setup-virtualkb.sh`** = optional Maliit for Plasma sessions. `--enable-sddm` flag also writes `/etc/sddm.conf.d/10-virtualkbd.conf` for greeter vkbd (kept opt-in because SDDM tweaks have hung the X220 in the past).
+- **`setup-voidsplash.sh`** = optional boot splash. Clones jaylesworth/voidsplash, installs binary to `/bin/voidsplash`, creates runit service, copies bundled sample frames to `/etc/voidsplash/`. `--grub-quiet` flag also appends `console=tty2` to `GRUB_CMDLINE_LINUX_DEFAULT` so kernel logs don't paint over the splash.
+
+All scripts follow the same shape: `set -euo pipefail`, color-coded `log_*` helpers, `--dry-run`/`--help` flags, idempotent xbps package check loop, sudo keep-alive in non-dry-run mode. There is **intentional duplication** of these helpers across scripts (no shared library) — keeps each script standalone runnable.
+
+When extending the dotfiles installer with a new payload source (other than `dotfiles/` and `images/`), define a new `*_DIR` variable at the top and pass `"$NEW_DIR/relpath"` to `install_file` — don't duplicate the helper.
 
 ## Conventions worth knowing
 
@@ -63,7 +106,7 @@ Don't introduce non-Breeze colors (e.g. `#1d1f21`, which was an earlier mistake)
 
 ### Qt apps
 
-Theming relies on `QT_QPA_PLATFORMTHEME=qt6ct` exported from `/etc/environment` (set by section 12 of setup-system.sh), plus `qt6ct`, `kvantum`, `breeze-icons` packages. Without this, Qt apps render without toolbar icons and default Fusion palette. The user runs `qt6ct` once to pick style + icon theme — that's a preference, not script-managed.
+Theming relies on `QT_QPA_PLATFORMTHEME=qt6ct` exported from `/etc/environment` (set by `setup-base.sh`), plus `qt6ct`, `kvantum`, `breeze-icons` packages. Without this, Qt apps render without toolbar icons and default Fusion palette. The user runs `qt6ct` once to pick style + icon theme — that's a preference, not script-managed.
 
 ## Hardware-specific gotchas (X220 Tablet)
 
