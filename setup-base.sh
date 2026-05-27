@@ -49,11 +49,13 @@ PACKAGES=(
     # qt6ct        = central control panel for Qt6 apps (icon theme, style, palette)
     # kvantum      = widget engine that respects SVG themes (Breeze included)
     breeze-icons qt6ct kvantum
+    # GUI apps
+    firefox
 )
 # rtkit is included in PACKAGES but its runit service is NOT enabled by
 # default — it only quiets cosmetic "RTKit error: ServiceUnknown" warnings;
 # audio works without it. Enable manually with: sudo ln -s /etc/sv/rtkit /var/service/
-SERVICES=(dbus elogind polkitd sddm bluetoothd NetworkManager)
+SERVICES=(dbus polkitd sddm bluetoothd NetworkManager)
 # Old network stack services to unlink in favor of NetworkManager.
 STALE_SERVICES=(dhcpcd wpa_supplicant)
 REQUIRED_GROUPS=(video audio input storage wheel bluetooth network plugdev)

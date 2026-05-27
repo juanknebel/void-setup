@@ -124,6 +124,30 @@ else
     fi
 fi
 
+# --- 3. Plasma Qt platform theme drop-in ---
+# setup-base.sh sets QT_QPA_PLATFORMTHEME=qt6ct globally in /etc/environment
+# (correct for Sway), but under Plasma that hijacks the `kde` platform theme
+# and Qt apps stop responding to Plasma System Settings color/icon changes.
+# Plasma sources env/*.sh after PAM, so this drop-in overrides the global
+# default for Plasma sessions only — Sway is untouched.
+QT_DROPIN_DIR="/etc/xdg/plasma-workspace/env"
+QT_DROPIN_FILE="$QT_DROPIN_DIR/qt-platform-theme.sh"
+QT_DROPIN_CONTENT='export QT_QPA_PLATFORMTHEME=kde'
+
+if [ -f "$QT_DROPIN_FILE" ] && grep -qxF "$QT_DROPIN_CONTENT" "$QT_DROPIN_FILE"; then
+    log_success "Plasma Qt platform theme drop-in already in place."
+else
+    if [ "$DRY_RUN" = true ]; then
+        log_warn "[Dry-Run] Would write $QT_DROPIN_FILE with: $QT_DROPIN_CONTENT"
+    else
+        log_info "Writing Plasma Qt platform theme drop-in to $QT_DROPIN_FILE"
+        sudo install -d "$QT_DROPIN_DIR"
+        echo "$QT_DROPIN_CONTENT" | sudo tee "$QT_DROPIN_FILE" > /dev/null
+        sudo chmod +x "$QT_DROPIN_FILE"
+        log_success "Drop-in installed."
+    fi
+fi
+
 log_success "=== PLASMA DESKTOP STACK COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then
     log_info "Reboot and pick 'Plasma (Wayland)' from the SDDM session menu."
