@@ -54,7 +54,7 @@ Reboot and pick **Sway** from the SDDM session menu.
 
 Reboot and pick **Plasma (Wayland)** from the SDDM session menu. See
 [Post-install manual steps](#post-install-manual-steps) for the GUI
-polish (Apply Plasma Settings, bezel button mapping, Maliit, etc.).
+polish (Apply Plasma Settings, bezel button mapping, etc.).
 
 > `setup-dotfiles.sh` is Sway-focused; skip it for a Plasma-only setup.
 
@@ -82,12 +82,7 @@ self-contained and idempotent.
 |---|---|---|
 | `setup-zram.sh` | zram compressed swap (zstd, 50%, prio 32767) + `vm.swappiness=100` | `--with-swapfile` also creates `/swapfile` (prio=10) as OOM backstop |
 | `setup-fingerprint.sh` | fprintd + libfprint, probes UPEK reader (`147e:2016`), reports enrollment | — |
-| `setup-virtualkb.sh` | Maliit on-screen keyboard for Plasma sessions | `--enable-sddm` also wires the SDDM greeter vkbd |
 | `setup-voidsplash.sh` | Framebuffer boot splash via runit (no Plymouth, no initramfs changes) | `--grub-quiet` also adds `console=tty2` to GRUB so kernel logs render off-splash |
-
-For Sway, the on-screen keyboard is `wvkbd` — already installed by
-`setup-sway.sh` and bound to `Mod+Shift+T` in the dotfiles. Maliit is
-Plasma-specific.
 
 ---
 
@@ -122,7 +117,7 @@ triggers them.
 - **Map the bezel rotation button** — System Settings → Shortcuts →
   Custom Shortcuts → New → Global Shortcut → Command/URL. Trigger:
   press the bezel rotation button (captures `XF86TaskPane`). Action:
-  `~/.local/bin/rotate_screen_twm.sh`. (In Sway this binding
+  `~/.local/bin/rotate_screen_kde.sh`. (In Sway this binding
   is already in `dotfiles/sway/config` — no GUI step needed.)
 - ⚠️ **NEVER set `DisplayServer=wayland`** in any
   `/etc/sddm.conf.d/*.conf` — this has fully hung the X220 in the past
@@ -145,14 +140,6 @@ triggers them.
   ⚠️ Always use `sufficient`, **never** `required` alone — CVE-2024-37408
   covers vulnerabilities in solo-fingerprint setups. Keep password as
   fallback.
-
-### After `setup-virtualkb.sh` (Plasma sessions)
-
-- **Enable Maliit** — System Settings → Input Devices → Virtual
-  Keyboard → **Maliit**. The pane only appears under Wayland (not X11).
-  Touching a text field will pop the keyboard.
-- For Sway, the on-screen keyboard is `wvkbd` and is already bound to
-  `Mod+Shift+T` by the dotfiles — no extra step.
 
 ### After `setup-zram.sh` — decide on swapfile backstop
 
@@ -235,7 +222,6 @@ setup-plasma.sh            KDE Plasma 6 stack
 setup-dotfiles.sh          user-level dotfiles installer
 setup-zram.sh              zram + sysctl swap setup
 setup-fingerprint.sh       UPEK fingerprint setup
-setup-virtualkb.sh         Maliit virtual keyboard (Plasma)
 setup-voidsplash.sh        runit boot splash
 dotfiles/                  payload copied into ~/.config + ~/.local/bin
 images/                    wallpapers copied into ~/Pictures

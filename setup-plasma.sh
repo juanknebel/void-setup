@@ -3,6 +3,8 @@
 # Exit immediately if a command exits with a non-zero status.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # --- Configuration ---
 DRY_RUN=false
 PACKAGES=(
@@ -148,6 +150,34 @@ else
     fi
 fi
 
+# --- 4. Plasma screen rotation helper ---
+# Companion to dotfiles/local/bin/rotate_screen_twm.sh (the Sway version).
+# Installed here rather than via setup-dotfiles.sh because that installer is
+# Sway-focused; this is the Plasma equivalent that drives kscreen-doctor.
+# Bind it to a custom shortcut in System Settings → Shortcuts (the bezel
+# rotation button on the X220 emits XF86TaskPane, same as under Sway).
+ROTATE_SRC="$SCRIPT_DIR/dotfiles/local/bin/rotate_screen_kde.sh"
+ROTATE_DST="$HOME/.local/bin/rotate_screen_kde.sh"
+
+if [ ! -f "$ROTATE_SRC" ]; then
+    log_warn "Source $ROTATE_SRC not found — skipping rotate_screen_kde install."
+elif [ -f "$ROTATE_DST" ] && cmp -s "$ROTATE_SRC" "$ROTATE_DST"; then
+    log_success "rotate_screen_kde.sh already up to date at $ROTATE_DST."
+else
+    if [ "$DRY_RUN" = true ]; then
+        log_warn "[Dry-Run] Would install $ROTATE_SRC -> $ROTATE_DST"
+    else
+        mkdir -p "$(dirname "$ROTATE_DST")"
+        if [ -f "$ROTATE_DST" ]; then
+            ts=$(date +%Y%m%d%H%M%S)
+            cp -a "$ROTATE_DST" "$ROTATE_DST.bak.$ts"
+            log_info "Backed up existing $ROTATE_DST to .bak.$ts"
+        fi
+        install -m 0755 "$ROTATE_SRC" "$ROTATE_DST"
+        log_success "Installed $ROTATE_DST"
+    fi
+fi
+
 log_success "=== PLASMA DESKTOP STACK COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then
     log_info "Reboot and pick 'Plasma (Wayland)' from the SDDM session menu."
@@ -156,6 +186,11 @@ if [ "$DRY_RUN" = false ]; then
     log_info "  System Settings → Startup and Shutdown → Login Screen (SDDM)"
     log_info "    → select Breeze → click 'Apply Plasma Settings'."
     log_info "  This copies the Plasma wallpaper / color scheme / font into SDDM."
+    log_info ""
+    log_info "To bind the screen rotation helper:"
+    log_info "  System Settings → Shortcuts → Custom Shortcuts → Edit → New → Global Shortcut → Command/URL"
+    log_info "    Trigger: XF86TaskPane (X220 bezel button) or any keys you prefer"
+    log_info "    Action:  ~/.local/bin/rotate_screen_kde.sh"
     log_info ""
     log_info "DO NOT set DisplayServer=wayland in any /etc/sddm.conf.d/*.conf —"
     log_info "the X220 has hung hard on that setting (greeter stays in X, sessions go Wayland)."
