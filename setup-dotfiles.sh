@@ -33,7 +33,6 @@ fi
 
 # Save a .bak.<timestamp> copy of a regular file before overwriting it.
 # Symlinks and missing files are silently skipped (set -e safe).
-# In dry-run, only reports what would happen.
 backup_if_exists() {
     if [ -f "$1" ] && [ ! -L "$1" ]; then
         if [ "$DRY_RUN" = true ]; then
@@ -49,8 +48,7 @@ backup_if_exists() {
 }
 
 # Copy a payload file to its destination, honoring dry-run and backup
-# conventions. Source mode (incl. executable bit) is preserved. The src
-# path is absolute; callers usually build it from $DOTFILES_DIR or $IMAGES_DIR.
+# conventions. Source mode (incl. executable bit) is preserved.
 install_file() {
     local src="$1"
     local dest="$2"
@@ -67,7 +65,7 @@ install_file() {
     fi
 }
 
-# Create dirs idempotently; dry-run only logs the would-create dirs.
+# Create dirs idempotently.
 ensure_dir() {
     for d in "$@"; do
         [ -d "$d" ] && continue
@@ -88,43 +86,66 @@ ensure_executable() {
     fi
 }
 
-log_info "Installing local Breeze Dark configurations from $DOTFILES_DIR..."
+log_info "Installing Breeze Dark i3/X11 configurations from $DOTFILES_DIR..."
 
-# Ensure target dirs exist (setup-system.sh also creates most of these, but
-# this script must be runnable on its own).
-ensure_dir ~/.config/sway ~/.config/waybar ~/.config/mako ~/.config/foot ~/.config/alacritty ~/.local/bin ~/Pictures
+ensure_dir \
+    ~/.config/i3 \
+    ~/.config/polybar \
+    ~/.config/dunst \
+    ~/.config/picom \
+    ~/.config/rofi \
+    ~/.config/alacritty \
+    ~/.local/bin \
+    ~/Pictures
 
-# --- 1. Sway ---
-install_file "$DOTFILES_DIR/sway/config" ~/.config/sway/config
-log_success "Sway core configuration installed."
+# --- 1. i3 ---
+install_file "$DOTFILES_DIR/i3/config" ~/.config/i3/config
+log_success "i3 core configuration installed."
 
-# --- 2. Waybar ---
-install_file "$DOTFILES_DIR/waybar/config"    ~/.config/waybar/config
-install_file "$DOTFILES_DIR/waybar/style.css" ~/.config/waybar/style.css
-log_success "Waybar config and layout styling installed."
+# --- 2. Polybar ---
+install_file "$DOTFILES_DIR/polybar/config.ini" ~/.config/polybar/config.ini
+install_file "$DOTFILES_DIR/polybar/launch.sh"  ~/.config/polybar/launch.sh
+ensure_executable ~/.config/polybar/launch.sh
+log_success "Polybar config and launch script installed."
 
-# --- 3. Mako & Foot ---
-install_file "$DOTFILES_DIR/mako/config"   ~/.config/mako/config
-install_file "$DOTFILES_DIR/foot/foot.ini" ~/.config/foot/foot.ini
-log_success "Mako and Foot desktop interfaces installed."
+# --- 3. Dunst ---
+install_file "$DOTFILES_DIR/dunst/dunstrc" ~/.config/dunst/dunstrc
+log_success "Dunst notification config installed."
 
-# --- 4. Automation scripts ---
-install_file "$DOTFILES_DIR/local/bin/rotate_screen_twm.sh" ~/.local/bin/rotate_screen_twm.sh
+# --- 4. Picom ---
+install_file "$DOTFILES_DIR/picom/picom.conf" ~/.config/picom/picom.conf
+log_success "Picom compositor config installed."
+
+# --- 5. Rofi ---
+install_file "$DOTFILES_DIR/rofi/config.rasi" ~/.config/rofi/config.rasi
+log_success "Rofi launcher config installed."
+
+# --- 6. Automation scripts ---
+install_file "$DOTFILES_DIR/local/bin/rotate_screen_x11.sh" ~/.local/bin/rotate_screen_x11.sh
 install_file "$DOTFILES_DIR/local/bin/powermenu.sh"         ~/.local/bin/powermenu.sh
-ensure_executable ~/.local/bin/rotate_screen_twm.sh ~/.local/bin/powermenu.sh
-log_success "Tablet rotation engine and safe power configurations installed."
+install_file "$DOTFILES_DIR/local/bin/lock.sh"              ~/.local/bin/lock.sh
+ensure_executable \
+    ~/.local/bin/rotate_screen_x11.sh \
+    ~/.local/bin/powermenu.sh \
+    ~/.local/bin/lock.sh
+log_success "Tablet rotation, power menu, and lock scripts installed."
 
-# --- 5. Shell environment (zsh + Starship) ---
+# --- 7. Shell environment (zsh + Starship) ---
 # chsh is intentionally NOT performed — the system shell stays bash, and
-# Alacritty/foot launch zsh on their own.
+# Alacritty launches zsh on its own.
 install_file "$DOTFILES_DIR/zshrc"         ~/.zshrc
 install_file "$DOTFILES_DIR/starship.toml" ~/.config/starship.toml
 log_success "Shell environment (zsh + Starship) installed."
 
-# --- 6. Alacritty ---
+# --- 8. Alacritty ---
 install_file "$DOTFILES_DIR/alacritty/alacritty.toml" ~/.config/alacritty/alacritty.toml
 log_success "Alacritty terminal configuration installed."
 
-# --- 7. Wallpapers (sway picks them up via swaybg in its config) ---
+# --- 9. X11 session files ---
+install_file "$DOTFILES_DIR/Xresources" ~/.Xresources
+install_file "$DOTFILES_DIR/xprofile"   ~/.xprofile
+log_success "X11 session files (Xresources, xprofile) installed."
+
+# --- 10. Wallpapers ---
 install_file "$IMAGES_DIR/forest_2560x1600.jpg" ~/Pictures/forest_2560x1600.jpg
 log_success "Wallpapers installed to ~/Pictures."

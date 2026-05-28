@@ -1,0 +1,20 @@
+# ~/.xprofile — sourced by SDDM before launching the i3 session.
+# Also source this in ~/.xinitrc when using startx from a TTY.
+
+# Merge Xresources (DPI, color palette)
+[ -f "$HOME/.Xresources" ] && xrdb -merge "$HOME/.Xresources"
+
+# GTK theme — Breeze-Dark for consistent look with Qt apps in i3
+export GTK_THEME=Breeze-Dark
+export GTK2_RC_FILES="$HOME/.gtkrc-2.0"
+
+# Cursor theme
+export XCURSOR_THEME=breeze_cursors
+export XCURSOR_SIZE=24
+
+# PipeWire: start here for TTY/startx sessions where autostart/ is not sourced.
+# SDDM handles this via ~/.config/autostart on display-manager sessions.
+if ! pgrep -x pipewire > /dev/null; then
+    pipewire &
+    pipewire-pulse &
+fi

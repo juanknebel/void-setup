@@ -1,7 +1,7 @@
 # ~/.config/alacritty/alacritty.toml
-# Void Linux / ThinkPad X220 Tablet
+# Void Linux / ThinkPad X61 Tablet
 # System shell = bash; Alacritty launches zsh without touching chsh.
-# Theme: Breeze Dark (Plasma 6) to match the desktop palette.
+# Theme: Breeze Dark to match the i3/X11 desktop palette.
 
 # ---------------------------------------------------------------------------
 # Shell: launch zsh as a login shell ONLY inside Alacritty

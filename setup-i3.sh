@@ -3,31 +3,51 @@
 # Exit immediately if a command exits with a non-zero status.
 set -euo pipefail
 
-# Installs the Sway compositor and the user-space helpers wired into
-# dotfiles/sway/config (waybar, mako, swaylock, fuzzel, foot, etc.).
-# Assumes setup-base.sh has already run (provides Wayland prereqs,
+# Installs i3 and the user-space helpers wired into dotfiles/i3/config
+# (polybar, dunst, picom, rofi, flameshot, etc.).
+# Assumes setup-base.sh has already run (provides X11 prereqs,
 # fonts, audio, libinput, etc.).
 
 # --- Configuration ---
 DRY_RUN=false
 PACKAGES=(
-    # Sway compositor + window utilities
-    sway swaybg swaylock swayidle Waybar fuzzel mako wlr-randr
-    # Screenshots + clipboard (Wayland-native stack)
-    # grim = capture · slurp = region select · satty = annotate · wl-clipboard = wl-copy/wl-paste
-    grim slurp satty wl-clipboard
-    # Terminal + virtual keyboard for tablet mode
-    # foot is the secondary terminal used by waybar TUI popups (nmtui/bluetui/pulsemixer);
-    # wvkbd is the on-screen keyboard bound to Mod+Shift+T.
-    foot wvkbd
-    # Hardware controls — TUIs invoked from waybar + CLI for backlight
-    pulsemixer bluetui brightnessctl
-    # Tablet bezel button identification under Wayland
-    wev evtest
+    # Window manager
+    i3
+    # Status bar — highly configurable, analogous to waybar
+    polybar
+    # Compositor — provides shadows and transparency for X11 sessions.
+    # Uses the xrender backend by default (safer on Intel GMA X3100).
+    picom
+    # Notification daemon (Breeze Dark themed via dunstrc)
+    dunst
+    # App launcher (replaces fuzzel)
+    rofi
+    # Screen locker
+    i3lock
+    # Screenshots + annotation GUI (replaces grim + satty)
+    flameshot
+    # Clipboard (X11 — replaces wl-clipboard)
+    xclip
+    # Wallpaper setter (replaces swaybg)
+    feh
+    # Display management CLI and GUI
+    xrandr arandr
+    # Input device control (used by rotate_screen_x11.sh for Wacom remapping)
+    xinput
+    # Idle auto-lock (replaces swayidle)
+    xautolock
+    # Hardware controls + TUIs
+    brightnessctl pulsemixer bluetui
+    # File manager (same as base — listed for clarity; no-op if already installed)
+    pcmanfm-qt
+    # Key/button event inspector (replaces wev)
+    xev
+    # X11 automation (useful for scripting window management)
+    xdotool
 )
 
 # Prerequisites assumed already installed by setup-base.sh.
-REQUIRED_PREREQS=(elogind mesa-dri xorg-server-xwayland sddm dbus polkit pipewire wireplumber libinput libwacom nerd-fonts-ttf)
+REQUIRED_PREREQS=(mesa-dri xorg-minimal sddm dbus polkit pipewire wireplumber libinput nerd-fonts-ttf)
 
 # Colors for output formatting
 NC='\033[0m'
@@ -43,7 +63,7 @@ log_err() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 show_help() {
     echo "Usage: $0 [OPTIONS]"
-    echo "Installs Sway and its helper utilities. Run setup-base.sh first."
+    echo "Installs i3 and its helper utilities. Run setup-base.sh first."
     echo ""
     echo "Options:"
     echo "  -d, --dry-run    Validate packages without installing."
@@ -62,7 +82,7 @@ done
 if [ "$DRY_RUN" = true ]; then
     log_warn "=== RUNNING IN DRY-RUN MODE (NO CHANGES WILL BE MADE) ==="
 else
-    log_info "=== INITIALIZING SWAY COMPOSITOR STACK ==="
+    log_info "=== INITIALIZING i3 WINDOW MANAGER STACK ==="
     sudo -v
     while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 fi
@@ -84,8 +104,8 @@ else
     exit 1
 fi
 
-# --- 2. Sway Package Installation ---
-log_info "Checking Sway packages against xbps..."
+# --- 2. i3 Package Installation ---
+log_info "Checking i3 packages against xbps..."
 MISSING_PACKAGES=()
 for pkg in "${PACKAGES[@]}"; do
     if xbps-query "$pkg" > /dev/null 2>&1; then
@@ -101,18 +121,19 @@ for pkg in "${PACKAGES[@]}"; do
 done
 
 if [ ${#MISSING_PACKAGES[@]} -eq 0 ]; then
-    log_success "All Sway packages are satisfied."
+    log_success "All i3 packages are satisfied."
 else
     if [ "$DRY_RUN" = true ]; then
         log_warn "[Dry-Run] Packages slated for installation: ${MISSING_PACKAGES[*]}"
     else
-        log_info "Installing missing Sway packages: ${MISSING_PACKAGES[*]}"
+        log_info "Installing missing i3 packages: ${MISSING_PACKAGES[*]}"
         sudo xbps-install -S "${MISSING_PACKAGES[@]}"
     fi
 fi
 
-log_success "=== SWAY COMPOSITOR STACK COMPLETE ==="
+log_success "=== i3 WINDOW MANAGER STACK COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then
-    log_info "Run ./setup-dotfiles.sh next to copy the sway/waybar/foot configs into your HOME."
-    log_info "Then reboot and pick the 'Sway' session from the SDDM menu."
+    log_info "Run ./setup-dotfiles.sh next to copy the i3/polybar/dunst configs into your HOME."
+    log_info "For X61 Tablet hardware (Wacom, thinkfan, TLP): run ./setup-x61.sh."
+    log_info "Then reboot and pick the 'i3' session from the SDDM menu."
 fi

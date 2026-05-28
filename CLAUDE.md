@@ -4,72 +4,62 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Provisioning + dotfiles for a **ThinkPad X220 Tablet running Void Linux + Sway (Wayland)**, themed to Breeze Dark for visual consistency with KDE Plasma 6 / Konsole. Not a generic dotfiles repo — many design decisions are X220-specific (see "Hardware-specific gotchas" below).
+Provisioning + dotfiles for a **ThinkPad X61 Tablet running Void Linux + i3 (X11)**, themed to Breeze Dark for visual consistency. Not a generic dotfiles repo — many design decisions are X61-specific (see "Hardware-specific gotchas" below).
 
 ## Common commands
 
 All setup scripts are idempotent and support `--dry-run` for previews. There are **no build/lint/test commands** — this is a config repo.
 
-The scripts are deliberately modular so you can build either a Sway box, a Plasma box, or both — pick which to run, none are mandatory beyond `setup-base.sh`.
-
 ```bash
 # Pre-install (run only on a fresh disk, from the live ISO; needs root)
-./setup-disk.sh /dev/sda          # interactive cfdisk + automated mkfs/mount
+./setup-disk.sh /dev/sda          # interactive cfdisk + automated mkfs/mount (BIOS/MBR)
 
 # After void-installer + first boot
-./setup-base.sh                   # common base (NM, SDDM, audio, BT, fonts, Qt theming, shell, CLI)
+./setup-base.sh                   # common base (NM, SDDM, audio, BT, fonts, Qt/GTK theming, shell, CLI)
 
-# Pick your desktop(s) — both can coexist
-./setup-sway.sh                   # sway compositor + helpers (waybar, fuzzel, mako, foot, screenshots)
-./setup-plasma.sh                 # KDE Plasma desktop + applets + extras
+# Desktop
+./setup-i3.sh                     # i3 WM + helpers (polybar, picom, dunst, rofi, flameshot, etc.)
 
-# User configs (copies dotfiles/ + images/ into $HOME; sway-focused)
+# User configs (copies dotfiles/ + images/ into $HOME; i3-focused)
 ./setup-dotfiles.sh
 
-# Optional add-ons
+# Hardware add-ons
+./setup-x61.sh                    # X61 Tablet hardware (Wacom, thinkfan, TLP, HDAPS, acpi_call)
 ./setup-zram.sh                   # zram swap (zstd, 50%, prio 32767) + swappiness=100
-                                  #   --with-swapfile also creates /swapfile (pri=10) as OOM backstop
-./setup-fingerprint.sh            # fprintd + libfprint, probes UPEK reader (147e:2016)
-./setup-virtualkb.sh              # Maliit for Plasma; --enable-sddm also wires greeter vkbd
-./setup-voidsplash.sh             # framebuffer boot splash via runit
-                                  #   --grub-quiet also adds console=tty2 to GRUB cmdline
+./setup-fingerprint.sh            # fprintd + libfprint (check USB ID before relying on this)
 ```
 
 Every script supports `-d/--dry-run` and `-h/--help`.
 
 ## Architecture
 
-The repo is a layered set of standalone scripts. Each script is independently runnable and idempotent. The layers form a dependency chain:
+The repo is a layered set of standalone scripts. Each script is independently runnable and idempotent.
 
 ```
-setup-disk.sh         (pre-install, in live ISO)
+setup-disk.sh         (pre-install, in live ISO — BIOS/MBR layout)
        ↓
    [void-installer, reboot]
        ↓
-setup-base.sh         (common system: NM/SDDM/audio/BT/fonts/Qt/shell/CLI)
-       ↓                                   ↓
-setup-sway.sh                     setup-plasma.sh   (pick one or both)
-       ↓                                   ↓
-setup-dotfiles.sh                 [Plasma GUI config]
+setup-base.sh         (common system: NM/SDDM/audio/BT/fonts/Qt/GTK/shell/CLI)
        ↓
-[optional add-ons: setup-zram.sh, setup-fingerprint.sh,
-                   setup-virtualkb.sh, setup-voidsplash.sh]
+setup-i3.sh           (i3 WM + X11 helper stack)
+       ↓
+setup-dotfiles.sh     (user configs: i3, polybar, dunst, picom, rofi, alacritty, zsh)
+       ↓
+[optional: setup-x61.sh, setup-zram.sh, setup-fingerprint.sh]
 ```
 
 Per-script responsibilities:
 
-- **`setup-disk.sh`** = pre-install only. Takes a target device, runs cfdisk interactively, then automates mkfs.vfat (ESP) + mkfs.ext4 (root) + mount under `/mnt`. Has strict guard rails: refuses if any partition on the target is mounted, requires root (no sudo in live ISO), requires explicit `yes` confirmation before mkfs.
-- **`setup-base.sh`** = system foundation shared by both DEs (needs sudo). Installs xbps packages for NM/SDDM/audio/BT/input/fonts/shell/CLI/Qt-theming, sets up runit service symlinks, configures SDDM theme to Breeze, links PipeWire system configs + user autostart, appends `QT_QPA_PLATFORMTHEME=qt6ct` to `/etc/environment`, cleans up stale dhcpcd. Other DE/optional scripts validate its prerequisites and bail with a clear error if missing.
-- **`setup-sway.sh`** / **`setup-plasma.sh`** = compositor/DE additions. Both validate base prerequisites first. Sway adds the wlroots stack + helpers (waybar, fuzzel, mako, screenshots tooling). Plasma adds the Plasma 6 stack + KDE apps. Both can be installed side-by-side and selected from the SDDM session menu.
-- **`setup-dotfiles.sh`** = user-level (no sudo). Copies payload from `dotfiles/` and `images/` into `~/.config/`, `~/.local/bin/`, `~/Pictures/`. Sway-focused (the dotfiles assume Sway; Plasma users configure via GUI). Uses a mirror-of-destination layout where `install_file` takes absolute src paths from `$DOTFILES_DIR` or `$IMAGES_DIR`; backups go to `<path>.bak.<timestamp>`.
-- **`setup-zram.sh`** = optional. Installs zramen, writes `/etc/sv/zramen/conf` via heredoc (zstd / 50% / priority 32767), links the runit service, writes `vm.swappiness=100`. `--with-swapfile` additionally creates `/swapfile` at priority 10 as an anti-OOM backstop (zram fills first).
-- **`setup-fingerprint.sh`** = optional UPEK setup. Installs fprintd/libfprint, probes USB ID `147e:2016`, reports enrollment status. PAM integration intentionally NOT scripted — manual opt-in with mandatory `sufficient` semantics (CVE-2024-37408).
-- **`setup-virtualkb.sh`** = optional Maliit for Plasma sessions. `--enable-sddm` flag also writes `/etc/sddm.conf.d/10-virtualkbd.conf` for greeter vkbd (kept opt-in because SDDM tweaks have hung the X220 in the past).
-- **`setup-voidsplash.sh`** = optional boot splash. Clones jaylesworth/voidsplash, installs binary to `/bin/voidsplash`, creates runit service, copies bundled sample frames to `/etc/voidsplash/`. `--grub-quiet` flag also appends `console=tty2` to `GRUB_CMDLINE_LINUX_DEFAULT` so kernel logs don't paint over the splash.
+- **`setup-disk.sh`** = pre-install only. BIOS/MBR layout: 512MB /boot (ext4, bootable) + rest as / (ext4). No EFI partition. Runs cfdisk interactively, then automates mkfs.ext4 + mount under `/mnt`. Guards: refuses if partitions mounted, requires root, requires `yes` confirmation before mkfs.
+- **`setup-base.sh`** = system foundation (needs sudo). Installs packages for NM/SDDM/audio/BT/input/fonts/shell/CLI/Qt+GTK-theming, sets up runit service symlinks, configures SDDM theme to Breeze, links PipeWire system configs + user autostart, appends `QT_QPA_PLATFORMTHEME=qt6ct` to `/etc/environment`.
+- **`setup-i3.sh`** = i3 compositor additions. Validates base prerequisites first. Adds the X11 WM stack: i3, polybar, picom, dunst, rofi, flameshot, xclip, feh, xrandr, xinput, xautolock, brightnessctl, pulsemixer, bluetui.
+- **`setup-dotfiles.sh`** = user-level (no sudo). Copies payload from `dotfiles/` and `images/` into `~/.config/`, `~/.local/bin/`, `~/Pictures/`. Uses `install_file` with timestamp backups.
+- **`setup-x61.sh`** = optional X61 Tablet hardware. Installs xf86-input-wacom, libwacom, tlp, thinkfan, hdapsd, acpi_call. Writes `/etc/X11/xorg.conf.d/70-wacom.conf`, `/etc/thinkfan.conf`, `/etc/tlp.conf`, `/etc/modules-load.d/acpi_call.conf`. Enables runit services: tlp, thinkfan, hdapsd.
+- **`setup-zram.sh`** = optional. Same as main branch — hardware-agnostic.
+- **`setup-fingerprint.sh`** = optional. Same as main branch — verify your USB ID before relying on it.
 
-All scripts follow the same shape: `set -euo pipefail`, color-coded `log_*` helpers, `--dry-run`/`--help` flags, idempotent xbps package check loop, sudo keep-alive in non-dry-run mode. There is **intentional duplication** of these helpers across scripts (no shared library) — keeps each script standalone runnable.
-
-When extending the dotfiles installer with a new payload source (other than `dotfiles/` and `images/`), define a new `*_DIR` variable at the top and pass `"$NEW_DIR/relpath"` to `install_file` — don't duplicate the helper.
+All scripts follow the same shape: `set -euo pipefail`, color-coded `log_*` helpers, `--dry-run`/`--help` flags, idempotent xbps package check loop, sudo keep-alive in non-dry-run mode.
 
 ## Conventions worth knowing
 
@@ -77,44 +67,54 @@ When extending the dotfiles installer with a new payload source (other than `dot
 
 **All comments, documentation, commit messages, and any text inside files in this repo MUST be in English**, regardless of file type (configs, shell scripts, dotfiles, `.gitignore`, markdown, etc.). The user's chat language is Spanish but the codebase is English-only. When editing existing files, translate any Spanish text encountered to English in the same pass.
 
-### Sway config
+### i3 config
 
-- `;` is a **sway-config-level separator**, not shell. Multi-command exec must be wrapped: `exec_always sh -c 'pkill -x waybar; sleep 0.3; waybar'`. The `sleep 0.3` avoids a cold-boot race where helpers start before the Wayland socket is ready.
-- Panel output is **`LVDS-1`** on the X220 (not `eDP-1`). `rotate_screen_twm.sh` hardcodes this.
-- Rotation button on the bezel emits **`XF86TaskPane`** (not the "natural" `XF86RotateWindows`). Also bound to `Mod+Shift+R` as keyboard equivalent.
+- `;` has no special meaning in i3 config. Multi-command exec uses `sh -c '...'`.
+- The `sleep 0.3` in `exec_always` guards avoid a cold-boot race where i3 fires helpers before the X session is fully initialized.
+- Panel output is **`LVDS1`** on the X61 (X11/xrandr convention — not `LVDS-1` which is a Wayland/KMS convention).
+- Rotation button on the bezel emits **`XF86RotateWindows`** (different from X220's `XF86TaskPane`). Also bound to `Mod+Shift+R` as keyboard equivalent.
 - Multimedia/lock bindings use `wpctl` (from wireplumber) and `brightnessctl`.
+- Floating TUI popups use `alacritty --class <name>,Alacritty` + `for_window [instance="<name>"]` in i3 config.
 
 ### Shells
 
 - **System shell stays `bash`**. `chsh` is intentionally NOT performed.
-- alacritty and foot launch `zsh -l` via their own config — terminals open zsh, TTYs/scripts/SSH stay on bash.
-- Scripts with `#!/bin/sh` (powermenu.sh, rotate_screen_twm.sh) run under **dash** on Void. Use `printf`, not `echo -e` (dash prints `-e` literally as the first arg).
+- alacritty launches `zsh -l` via its own config — terminals open zsh, TTYs/scripts/SSH stay on bash.
+- Scripts with `#!/bin/sh` (powermenu.sh, rotate_screen_x11.sh, lock.sh, polybar/launch.sh) run under **dash** on Void. Use `printf`, not `echo -e` (dash prints `-e` literally as the first arg).
 
-### Color palette (strict Breeze Dark / Plasma 6)
+### Color palette (strict Breeze Dark)
 
 | Role | Hex | Where |
 |---|---|---|
-| Plasma View bg | `#232629` | sway client bg, waybar, mako, fuzzel, swaylock |
-| Plasma Window bg | `#31363b` | swaylock ring inside-color, fuzzel selection |
-| Konsole bg | `#232627` | alacritty + foot only |
-| Accent / selection | `#3daee9` | focus border, active workspace, ring |
-| Muted fg | `#7f8c8d` | inactive text |
-| Border alt | `#4d4d4d` | inactive borders, powerline separator |
+| Plasma View bg | `#232629` | i3 client bg, polybar, dunst, rofi, i3lock |
+| Plasma Window bg | `#31363b` | rofi selection bg |
+| Konsole bg | `#232627` | alacritty only |
+| Accent / selection | `#3daee9` | focus border, active workspace, dunst frame |
+| Muted fg | `#7f8c8d` | inactive text, unfocused borders |
+| Border alt | `#4d4d4d` | inactive borders, polybar separator |
 | Urgent | `#ed1515` | client.urgent, battery critical |
 
-Don't introduce non-Breeze colors (e.g. `#1d1f21`, which was an earlier mistake). The full ANSI palette in foot/alacritty mirrors Konsole's Breeze Dark.
+Don't introduce non-Breeze colors.
 
-### Qt apps
+### Qt/GTK apps
 
-Theming relies on `QT_QPA_PLATFORMTHEME=qt6ct` exported from `/etc/environment` (set by `setup-base.sh`), plus `qt6ct`, `kvantum`, `breeze-icons` packages. Without this, Qt apps render without toolbar icons and default Fusion palette. The user runs `qt6ct` once to pick style + icon theme — that's a preference, not script-managed.
+Qt theming relies on `QT_QPA_PLATFORMTHEME=qt6ct` (set by `setup-base.sh`).
+GTK theming: `GTK_THEME=Breeze-Dark` is exported from `~/.xprofile`, which SDDM sources before launching i3.
 
-## Hardware-specific gotchas (X220 Tablet)
+## Hardware-specific gotchas (X61 Tablet)
 
 These affect script defaults; flagging the non-obvious ones:
 
-- **mesa-dri** is mandatory; without it SDDM is a black screen on the Intel HD 3000 (Sandy Bridge).
-- **elogind** is mandatory for Wayland; without it Sway/Plasma can't create the Wayland socket.
-- **libspa-bluetooth** is needed for BT audio (without it pairing works but no sound).
-- **HDAPS accelerometer is NOT exposed as IIO** — `iio-sensor-proxy` doesn't work, so auto-rotation is impossible. Rotation is manual-only via bezel button + script.
-- **UPEK fingerprint reader (147e:2016)** works with fprintd on this unit. PAM integration is intentionally NOT enabled by this repo.
-- **Do NOT set `DisplayServer=wayland` in SDDM** — it locks the X220 entirely (the bitácora has the war story).
+- **BIOS-only, no UEFI** — `setup-disk.sh` creates a DOS/MBR partition table, not GPT. No EFI partition. GRUB is installed to the MBR by void-installer.
+- **mesa-dri** is mandatory; without it SDDM shows a black screen on the Intel GMA X3100 (965GM / i965).
+- **modesetting DDX driver is preferred** over `xf86-video-intel` for the GMA X3100 on modern kernels. Do not install `xf86-video-intel` unless you're troubleshooting specific artifacts.
+- **picom uses `backend = "xrender"`** — the glx backend has rendering bugs on the 965GM chipset. Do not switch to glx.
+- **elogind** is mandatory for SDDM session management on Void, even under X11.
+- **libspa-bluetooth** is needed for BT audio.
+- **Wacom ISD300 digitizer** — X11 driver is `xf86-input-wacom`. The exact xinput device name varies by firmware. Verify with `xinput list | grep -i wacom` and set `WACOM_DEVICE` env var if it differs from `Wacom ISD`.
+- **LVDS1** is the X11/xrandr output name (not `LVDS-1`). Hardcoded in `rotate_screen_x11.sh`.
+- **XF86RotateWindows** is the rotation button keysym on the X61 (not `XF86TaskPane` which is X220-specific). Verify with `xev` if the button doesn't respond.
+- **No IIO accelerometer** — rotation is manual-only via bezel button + script.
+- **acpi_call kernel module** for battery charge thresholds — written to `/etc/modules-load.d/acpi_call.conf` by `setup-x61.sh`, loads on next reboot.
+- **thinkfan** reads `/proc/acpi/ibm/thermal` for temperatures. The conservative defaults in `setup-x61.sh` may need tuning for your specific unit.
+- **HDAPS accelerometer** is exposed under `/sys/devices/platform/thinkpad_acpi` and used by `hdapsd` for HDD head parking on shock. Not related to screen rotation.

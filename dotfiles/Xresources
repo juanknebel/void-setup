@@ -1,0 +1,41 @@
+! ~/.Xresources — ThinkPad X61 Tablet / Void Linux / i3
+! Loaded by SDDM at login (via xrdb -merge). For TTY/startx, add:
+!   xrdb -merge ~/.Xresources  to ~/.xprofile.
+
+! ---------------------------------------------------------------------------
+! DPI
+! X61 screen is XGA (1024x768) at 12.1" ≈ 106 dpi, or SXGA+ (1400x1050) ≈ 144 dpi.
+! Set to 96 for XGA (safe default). Change to 144 for the SXGA+ panel.
+! ---------------------------------------------------------------------------
+Xft.dpi: 96
+Xft.antialias: 1
+Xft.hinting: 1
+Xft.hintstyle: hintmedium
+Xft.rgba: rgb
+
+! ---------------------------------------------------------------------------
+! Breeze Dark ANSI color palette (matches alacritty.toml)
+! ---------------------------------------------------------------------------
+*.foreground:  #eff0f1
+*.background:  #232627
+*.cursorColor: #eff0f1
+
+! Normal colors
+*.color0:  #232627
+*.color1:  #ed1515
+*.color2:  #11d116
+*.color3:  #f67400
+*.color4:  #1d99f3
+*.color5:  #9b59b6
+*.color6:  #1abc9c
+*.color7:  #fcfcfc
+
+! Bright colors
+*.color8:  #7f8c8d
+*.color9:  #c0392b
+*.color10: #1cdc9a
+*.color11: #fdbc4b
+*.color12: #3daee9
+*.color13: #8e44ad
+*.color14: #16a085
+*.color15: #ffffff

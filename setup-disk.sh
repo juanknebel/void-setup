@@ -9,11 +9,16 @@ set -euo pipefail
 #
 # Workflow:
 #   1. Probe the target device, refuse if any partition is mounted.
-#   2. Drop into cfdisk so YOU pick the layout (typical X220: 512M EFI
-#      + rest ext4 root, no swap partition).
-#   3. After you quit cfdisk, prompt for which partition is ESP and
-#      which is root, format both (vfat / ext4), and mount under /mnt
+#   2. Drop into cfdisk so YOU pick the layout (typical X61: 512M /boot
+#      + rest ext4 root, no swap partition — zram handles that later).
+#   3. After you quit cfdisk, prompt for which partition is /boot and
+#      which is root, format both (ext4), and mount under /mnt
 #      ready for the installer.
+#
+# BIOS/MBR layout — the X61 Tablet has no UEFI firmware:
+#   - /boot partition: ext4, 512 MB, bootable flag set
+#   - /     partition: ext4, rest of disk
+# GRUB is installed to the MBR by void-installer (not here).
 #
 # Swap is handled separately: post-install via setup-zram.sh
 # (--with-swapfile if you want an HDD backstop on top of zram).
@@ -46,8 +51,10 @@ show_help() {
     echo "  -h, --help       Show this help message."
     echo ""
     echo "Expected layout after cfdisk (you set it manually):"
-    echo "  - First partition  : ~512 MB, type 'EFI System'  → mkfs.vfat -F32, mounted at /mnt/boot/efi"
-    echo "  - Second partition : rest of disk, type 'Linux filesystem' → mkfs.ext4, mounted at /mnt"
+    echo "  - First partition  : ~512 MB, type 'Linux', bootable flag ON  → mkfs.ext4, mounted at /mnt/boot"
+    echo "  - Second partition : rest of disk, type 'Linux filesystem'    → mkfs.ext4, mounted at /mnt"
+    echo ""
+    echo "GRUB is installed to the MBR by void-installer — no EFI partition needed."
 }
 
 # --- Parse Arguments ---
@@ -80,7 +87,7 @@ fi
 
 # --- 1. Tool & Mount Sanity Checks ---
 log_info "Verifying required tools..."
-for tool in cfdisk mkfs.vfat mkfs.ext4 lsblk findmnt; do
+for tool in cfdisk mkfs.ext4 lsblk findmnt; do
     if ! command -v "$tool" > /dev/null 2>&1; then
         log_err "Required tool '$tool' is not available."
         exit 1
@@ -110,51 +117,51 @@ WARN
 
 if [ "$DRY_RUN" = true ]; then
     log_warn "[Dry-Run] Would prompt for Enter, then launch: cfdisk $DEVICE"
-    log_warn "[Dry-Run] Then prompt for ESP partition (e.g. ${DEVICE}1) and root (e.g. ${DEVICE}2),"
-    log_warn "[Dry-Run] run mkfs.vfat -F32 on ESP, mkfs.ext4 on root, mount root at /mnt,"
-    log_warn "[Dry-Run] and mount ESP at /mnt/boot/efi."
+    log_warn "[Dry-Run] Then prompt for /boot partition (e.g. ${DEVICE}1) and root (e.g. ${DEVICE}2),"
+    log_warn "[Dry-Run] run mkfs.ext4 on both, mount root at /mnt, and mount /boot at /mnt/boot."
     exit 0
 fi
 
 read -r _
 
 # --- 3. Interactive Partitioning ---
-log_info "Launching cfdisk on $DEVICE — choose GPT, create EFI System (~512M) and Linux filesystem partitions, Write, Quit."
+log_info "Launching cfdisk on $DEVICE — use DOS label; create a 512M Linux partition"
+log_info "(mark bootable) for /boot and a Linux filesystem partition for root. Write, Quit."
 cfdisk "$DEVICE"
 
 log_info "Updated layout:"
 lsblk -p "$DEVICE" | sed 's/^/    /'
 
-# --- 4. Identify ESP and Root ---
+# --- 4. Identify /boot and Root ---
 echo ""
-read -rp "Which partition is the ESP (vfat, ~512M)? e.g. ${DEVICE}1: " ESP_PART
-read -rp "Which partition is the root (ext4)?            e.g. ${DEVICE}2: " ROOT_PART
+read -rp "Which partition is /boot (~512M, bootable flag set)? e.g. ${DEVICE}1: " BOOT_PART
+read -rp "Which partition is the root filesystem?               e.g. ${DEVICE}2: " ROOT_PART
 
-for p in "$ESP_PART" "$ROOT_PART"; do
+for p in "$BOOT_PART" "$ROOT_PART"; do
     if [ ! -b "$p" ]; then
         log_err "$p is not a block device. Aborting before any formatting."
         exit 1
     fi
 done
 
-if [ "$ESP_PART" = "$ROOT_PART" ]; then
-    log_err "ESP and root cannot be the same partition."
+if [ "$BOOT_PART" = "$ROOT_PART" ]; then
+    log_err "/boot and root cannot be the same partition."
     exit 1
 fi
 
 # --- 5. Format ---
 echo ""
 log_warn "About to format:"
-log_warn "    $ESP_PART  → mkfs.vfat -F32"
-log_warn "    $ROOT_PART → mkfs.ext4"
+log_warn "    $BOOT_PART → mkfs.ext4 (will be mounted as /boot)"
+log_warn "    $ROOT_PART → mkfs.ext4 (will be mounted as /)"
 read -rp "Type 'yes' to continue: " CONFIRM
 if [ "$CONFIRM" != "yes" ]; then
     log_err "Confirmation not received — aborting."
     exit 1
 fi
 
-mkfs.vfat -F32 "$ESP_PART"
-log_success "Formatted $ESP_PART as vfat (FAT32)."
+mkfs.ext4 "$BOOT_PART"
+log_success "Formatted $BOOT_PART as ext4."
 
 mkfs.ext4 "$ROOT_PART"
 log_success "Formatted $ROOT_PART as ext4."
@@ -162,14 +169,15 @@ log_success "Formatted $ROOT_PART as ext4."
 # --- 6. Mount ---
 log_info "Mounting $ROOT_PART at /mnt..."
 mount "$ROOT_PART" /mnt
-mkdir -p /mnt/boot/efi
-log_info "Mounting $ESP_PART at /mnt/boot/efi..."
-mount "$ESP_PART" /mnt/boot/efi
+mkdir -p /mnt/boot
+log_info "Mounting $BOOT_PART at /mnt/boot..."
+mount "$BOOT_PART" /mnt/boot
 
 log_success "=== DISK PREPARATION COMPLETE ==="
 log_info "Mount summary:"
-findmnt /mnt /mnt/boot/efi | sed 's/^/    /'
+findmnt /mnt /mnt/boot | sed 's/^/    /'
 log_info ""
-log_info "Next: run 'void-installer'. When asked about filesystems, just keep the"
-log_info "existing mounts (do NOT format again). Pick ESP → vfat → /boot/efi, root → ext4 → /."
+log_info "Next: run 'void-installer'. When asked about filesystems, keep the existing"
+log_info "mounts (do NOT format again). Pick $BOOT_PART → ext4 → /boot,"
+log_info "$ROOT_PART → ext4 → /. Select GRUB (legacy BIOS) as the bootloader."
 log_info "Skip the swap step in the installer — swap is handled later by setup-zram.sh."

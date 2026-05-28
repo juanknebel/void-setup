@@ -1,14 +1,18 @@
 #!/bin/sh
-# Breeze Dark — palette consistent with alacritty.toml.
-# Icons are Nerd Font (Material Design Icons) — fuzzel needs --font set to
-# JetBrainsMono Nerd Font so the glyphs render instead of tofu boxes.
+# Power menu using rofi in dmenu mode.
+# Icons are Nerd Font (Material Design Icons) — rofi must use JetBrainsMono
+# Nerd Font so the glyphs render instead of tofu boxes.
 # Use printf instead of `echo -e` because /bin/sh on Void is dash, and dash
 # does not recognize -e: it prints it literally as the first menu option.
-SELECTION=$(printf '󰌾 Lock\n󰜉 Reboot\n󰐥 Shutdown\n󰍃 Logout\n' | fuzzel --dmenu --font="JetBrainsMono Nerd Font:size=12" --background-color=232629ff --text-color=eff0f1ff --match-color=3daee9ff --selection-color=31363bff --selection-text-color=eff0f1ff --border-color=3daee9ff --border-width=2 -p "System: ")
+SELECTION=$(printf '󰌾 Lock\n󰜉 Reboot\n󰐥 Shutdown\n󰍃 Logout\n' | \
+    rofi -dmenu \
+         -p "Power:" \
+         -font "JetBrainsMono Nerd Font 12" \
+         -theme-str 'window {width: 260px;} listview {lines: 4;}')
 
 case "$SELECTION" in
-    "󰌾 Lock") swaylock -c 232629 --ring-color 3daee9 --inside-color 31363b --text-color eff0f1 ;;
-    "󰜉 Reboot") loginctl reboot ;;
-    "󰐥 Shutdown") loginctl poweroff ;;
-    "󰍃 Logout") swaymsg exit ;;
+    "󰌾 Lock")     exec ~/.local/bin/lock.sh ;;
+    "󰜉 Reboot")   exec loginctl reboot ;;
+    "󰐥 Shutdown") exec loginctl poweroff ;;
+    "󰍃 Logout")   exec i3-msg exit ;;
 esac

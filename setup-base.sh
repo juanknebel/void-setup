@@ -3,34 +3,34 @@
 # Exit immediately if a command exits with a non-zero status.
 set -euo pipefail
 
-# Common system base for any desktop environment (Sway or Plasma).
+# Common system base for the i3/X11 desktop on Void Linux.
 # Installs: NetworkManager, SDDM stack, audio (PipeWire), Bluetooth,
-# input stack (libinput/libwacom), fonts, Qt theming, shell stack,
-# CLI tooling, and file managers. Wires up runit services and writes
-# /etc/environment + SDDM theme + PipeWire drop-ins.
+# input stack (libinput), fonts, Qt theming, GTK theming helper, shell
+# stack, CLI tooling, and file managers. Wires up runit services and
+# writes /etc/environment + SDDM theme + PipeWire drop-ins.
 #
-# Run this BEFORE the DE-specific scripts (setup-sway.sh, setup-plasma.sh).
+# Run this BEFORE setup-i3.sh and setup-x61.sh.
 
 # --- Configuration ---
 DRY_RUN=false
 PACKAGES=(
     # Network
     NetworkManager
-    # X11 compatibility (SDDM greeter still runs in X; Xwayland for X11
-    # apps under Wayland sessions). Without mesa-dri the Intel HD 3000
-    # has no driver and the greeter shows a black screen.
-    xorg-minimal mesa-dri xorg-server-xwayland
-    # Generic input stack — Wayland uses libinput directly; libwacom
-    # provides proper digitizer detection for the X220 Tablet stylus.
-    libinput libwacom
-    # Session / authentication (login and polkit)
+    # X11 server + minimal toolkit. mesa-dri is mandatory: without it the
+    # Intel GMA X3100 (965GM) has no driver and the SDDM greeter shows a
+    # black screen. xinit lets you startx from a TTY as an alternative to SDDM.
+    xorg-minimal mesa-dri xinit
+    # Generic input stack — libinput drives the pointer/touchpad under X11.
+    # (libwacom/xf86-input-wacom for the Wacom digitizer go in setup-x61.sh.)
+    libinput xf86-input-libinput
+    # Session / authentication
     sddm polkit elogind
     # PipeWire audio stack + Bluetooth daemon. bluez provides
     # /etc/sv/bluetoothd; libspa-bluetooth adds BT audio support to
     # PipeWire (without it BT pairs but audio fails).
     pipewire wireplumber rtkit bluez libspa-bluetooth
-    # Fonts (Wayland apps fail to open without them; Nerd Font for
-    # Waybar icons and prompt symbols).
+    # Fonts (apps fail to open without them; Nerd Font for polybar icons
+    # and prompt symbols).
     dejavu-fonts-ttf noto-fonts-ttf nerd-fonts-ttf
     # Shell stack + prompt. chsh is intentionally NOT performed — the
     # system shell stays as bash; terminals launch zsh on their own.
@@ -40,15 +40,14 @@ PACKAGES=(
     # jq = JSON parser (used, among other things, by the Claude Code statusline).
     alacritty tmux htop wget curl git neovim fastfetch jq
     # File managers
-    # pcmanfm-qt = primary GUI (Qt6, lightweight, integrates with Breeze)
+    # pcmanfm-qt = primary GUI (Qt6, lightweight)
     # gvfs       = automount for USB drives and trash support
-    # yazi       = backup TUI, launched with `yazi` from any terminal
+    # yazi       = TUI file manager
     pcmanfm-qt gvfs yazi
     # Qt theming — without these, Qt apps render without icons and lack a coherent palette
-    # breeze-icons = official KDE icon theme
-    # qt6ct        = central control panel for Qt6 apps (icon theme, style, palette)
-    # kvantum      = widget engine that respects SVG themes (Breeze included)
     breeze-icons qt6ct kvantum
+    # GTK theming — lxappearance provides a GUI to pick GTK theme/icons in i3 sessions
+    lxappearance
     # GUI apps
     firefox
 )
@@ -74,8 +73,8 @@ log_err() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 show_help() {
     echo "Usage: $0 [OPTIONS]"
-    echo "Provisions the common system base shared by Sway and Plasma."
-    echo "Run before setup-sway.sh / setup-plasma.sh / setup-dotfiles.sh."
+    echo "Provisions the common system base for the i3/X11 desktop."
+    echo "Run before setup-i3.sh / setup-x61.sh / setup-dotfiles.sh."
     echo ""
     echo "Options:"
     echo "  -d, --dry-run    Validate packages, services, and config without modifications."
@@ -296,8 +295,6 @@ for src in "${AUTOSTART_LINKS[@]}"; do
 done
 
 # --- 8. Stale Package Cleanup ---
-# Once NetworkManager is supervised, dhcpcd is redundant. Only remove it
-# when (a) installed, (b) its runit service is unlinked, (c) NM is supervised.
 log_info "Reviewing stale packages..."
 if ! xbps-query dhcpcd > /dev/null 2>&1; then
     log_success "dhcpcd package already absent."
@@ -320,8 +317,7 @@ fi
 # Set QT_QPA_PLATFORMTHEME=qt6ct in /etc/environment so any Qt6 app picks
 # up the centralized config from qt6ct: icon theme, widget style, color
 # scheme. Has to live in /etc/environment (not ~/.zshrc) so PAM/elogind
-# exports it BEFORE the WM starts — apps spawned from the WM don't source
-# the user's shell rc.
+# exports it BEFORE the WM starts.
 log_info "Reviewing Qt platform theme env var..."
 QT_ENV_LINE="QT_QPA_PLATFORMTHEME=qt6ct"
 QT_ENV_FILE="/etc/environment"
@@ -339,6 +335,7 @@ fi
 
 log_success "=== COMMON SYSTEM BASE COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then
-    log_info "Next: run ./setup-sway.sh and/or ./setup-plasma.sh, then ./setup-dotfiles.sh."
-    log_info "Optional: ./setup-zram.sh ./setup-fingerprint.sh ./setup-virtualkb.sh ./setup-voidsplash.sh"
+    log_info "Next: run ./setup-i3.sh, then ./setup-dotfiles.sh."
+    log_info "For X61 Tablet hardware: run ./setup-x61.sh."
+    log_info "Optional: ./setup-zram.sh ./setup-fingerprint.sh"
 fi
