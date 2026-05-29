@@ -30,6 +30,8 @@ PACKAGES=(
     # ACPI call kernel module (battery charge threshold scripting).
     # Requires DKMS / kernel headers; may need manual setup on some kernels.
     acpi_call
+    # Stylus note-taking and PDF annotation app with native Wacom support
+    xournalpp
 )
 
 SERVICES=(tlp thinkfan hdapsd)
