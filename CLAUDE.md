@@ -53,8 +53,8 @@ setup-dotfiles.sh     (user configs: i3, polybar, dunst, picom, rofi, alacritty,
 Per-script responsibilities:
 
 - **`setup-disk.sh`** = pre-install only. BIOS/MBR layout: 512MB /boot (ext4, bootable) + rest as / (ext4). No EFI partition. Runs cfdisk interactively, then automates mkfs.ext4 + mount under `/mnt`. Guards: refuses if partitions mounted, requires root, requires `yes` confirmation before mkfs.
-- **`setup-base.sh`** = system foundation (needs sudo). Installs packages for NM/SDDM/audio/BT/input/fonts/shell/CLI/Qt+GTK-theming/apps, sets up runit service symlinks (including `acpid` for laptop ACPI events), configures SDDM theme to Breeze, links PipeWire system configs + user autostart, appends `QT_QPA_PLATFORMTHEME=qt6ct` to `/etc/environment`.
-- **`setup-i3.sh`** = i3 compositor additions. Validates base prerequisites first. Adds the X11 WM stack: i3, polybar, picom, dunst, rofi, flameshot, xclip, feh, xrandr, xinput, xautolock, brightnessctl, pulsemixer, bluetui.
+- **`setup-base.sh`** = system foundation (needs sudo). Installs packages for NM/SDDM/audio/BT/input/fonts/shell/CLI/Qt+GTK-theming/apps, sets up runit service symlinks (including `acpid` for laptop ACPI events), configures SDDM theme to Breeze, links PipeWire system configs + user autostart, appends `QT_QPA_PLATFORMTHEME=qt6ct` to `/etc/environment`, and sets the TTY console keymap to `la-latin1` (Spanish - Latin American) in `/etc/rc.conf`.
+- **`setup-i3.sh`** = i3 compositor additions. Validates base prerequisites first. Adds the X11 WM stack: i3, polybar, picom, dunst, rofi, flameshot, xclip, feh, xrandr, xinput, xautolock, brightnessctl, pulsemixer, bluetui. Also writes `/etc/X11/xorg.conf.d/00-keyboard.conf` setting the X11 keyboard layout to `latam` (Spanish - Latin American), applied to both the SDDM greeter and the i3 session.
 - **`setup-dotfiles.sh`** = user-level (no sudo). Copies payload from `dotfiles/` and `images/` into `~/.config/`, `~/.local/bin/`, `~/Pictures/`. Uses `install_file` with timestamp backups.
 - **`setup-x61.sh`** = optional X61 Tablet hardware. Installs xf86-input-wacom, libwacom, tlp, thinkfan, acpi_call-dkms (+ dkms, linux-headers), and — only on a spinning HDD — hdapsd. Writes `/etc/X11/xorg.conf.d/70-wacom.conf`, `/etc/thinkfan.conf`, `/etc/tlp.conf`, `/etc/modules-load.d/acpi_call.conf`. Enables runit services: tlp, thinkfan, and hdapsd (HDD only). Asks SSD/HDD interactively (disk type autodetected as the default), or use `--ssd`/`--hdd` to answer non-interactively; on SSD it skips hdapsd and removes any stale `/var/service/hdapsd`.
 - **`setup-zram.sh`** = optional. Same as main branch — hardware-agnostic.
@@ -76,6 +76,7 @@ All scripts follow the same shape: `set -euo pipefail`, color-coded `log_*` help
 - Rotation button on the bezel emits **`XF86RotateWindows`** (different from X220's `XF86TaskPane`). Also bound to `Mod+Shift+R` as keyboard equivalent.
 - Multimedia/lock bindings use `wpctl` (from wireplumber) and `brightnessctl`.
 - Floating TUI popups use `alacritty --class <name>,Alacritty` + `for_window [instance="<name>"]` in i3 config.
+- **Keyboard layout is Spanish (Latin American), set in two separate layers with different names:** the X11 layout is **`latam`** (`/etc/X11/xorg.conf.d/00-keyboard.conf`, from `setup-i3.sh` — covers SDDM + i3); the console/TTY keymap is **`la-latin1`** (`KEYMAP` in `/etc/rc.conf`, from `setup-base.sh`). They are distinct subsystems — changing one does not affect the other. Apply live without relogin/reboot: `setxkbmap latam` (X11) / `sudo loadkeys la-latin1` (TTY).
 
 ### Shells
 

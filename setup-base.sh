@@ -358,8 +358,37 @@ else
     fi
 fi
 
+# --- 10. Console Keymap (TTY) ---
+# Spanish (Latin American) keymap for the bare TTYs. Void's runit reads
+# KEYMAP from /etc/rc.conf at boot; 'la-latin1' is the kbd keymap name.
+# X11/i3 keyboard layout is separate (see setup-i3.sh -> 00-keyboard.conf).
+log_info "Reviewing console (TTY) keymap..."
+KEYMAP_VALUE="la-latin1"
+RC_CONF="/etc/rc.conf"
+
+if [ -f "$RC_CONF" ] && grep -qE "^[[:space:]]*KEYMAP=\"?${KEYMAP_VALUE}\"?[[:space:]]*$" "$RC_CONF"; then
+    log_success "Console keymap already set to '$KEYMAP_VALUE' in $RC_CONF."
+elif [ -f "$RC_CONF" ] && grep -qE "^[[:space:]]*KEYMAP=" "$RC_CONF"; then
+    # An active (uncommented) KEYMAP line exists with a different value: rewrite it.
+    if [ "$DRY_RUN" = true ]; then
+        log_warn "[Dry-Run] Will set KEYMAP=\"$KEYMAP_VALUE\" in $RC_CONF (replacing current value)."
+    else
+        sudo sed -i -E "s|^[[:space:]]*KEYMAP=.*|KEYMAP=\"$KEYMAP_VALUE\"|" "$RC_CONF"
+        log_success "Set KEYMAP=\"$KEYMAP_VALUE\" in $RC_CONF (effective on next boot)."
+    fi
+else
+    # No active KEYMAP line (fresh install ships it commented out): append one.
+    if [ "$DRY_RUN" = true ]; then
+        log_warn "[Dry-Run] Will append KEYMAP=\"$KEYMAP_VALUE\" to $RC_CONF."
+    else
+        echo "KEYMAP=\"$KEYMAP_VALUE\"" | sudo tee -a "$RC_CONF" > /dev/null
+        log_success "Appended KEYMAP=\"$KEYMAP_VALUE\" to $RC_CONF (effective on next boot)."
+    fi
+fi
+
 log_success "=== COMMON SYSTEM BASE COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then
+    log_info "Console keymap set to '$KEYMAP_VALUE' on next boot. Apply now: sudo loadkeys $KEYMAP_VALUE"
     log_info "Next: run ./setup-i3.sh, then ./setup-dotfiles.sh."
     log_info "For X61 Tablet hardware: run ./setup-x61.sh."
     log_info "Optional: ./setup-zram.sh ./setup-fingerprint.sh"

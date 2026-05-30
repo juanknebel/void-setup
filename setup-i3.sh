@@ -131,8 +131,32 @@ else
     fi
 fi
 
+# --- 3. Keyboard Layout ---
+# Spanish (Latin American) layout. System-wide via xorg.conf.d so it applies
+# to both the SDDM greeter and the i3 session, and survives reboots.
+# 'latam' is the X11 layout name for Spanish - Latin American.
+KEYBOARD_CONF="/etc/X11/xorg.conf.d/00-keyboard.conf"
+if [ -f "$KEYBOARD_CONF" ]; then
+    log_success "Keyboard layout config already present: $KEYBOARD_CONF"
+else
+    if [ "$DRY_RUN" = true ]; then
+        log_warn "[Dry-Run] Would write XkbLayout 'latam' to $KEYBOARD_CONF"
+    else
+        sudo mkdir -p /etc/X11/xorg.conf.d
+        sudo tee "$KEYBOARD_CONF" > /dev/null <<'EOF'
+Section "InputClass"
+    Identifier  "system-keyboard"
+    MatchIsKeyboard "on"
+    Option      "XkbLayout" "latam"
+EndSection
+EOF
+        log_success "Wrote $KEYBOARD_CONF (Spanish - Latin American layout)"
+    fi
+fi
+
 log_success "=== i3 WINDOW MANAGER STACK COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then
+    log_info "Keyboard set to 'latam' on next login. Apply now without relogin: setxkbmap latam"
     log_info "Run ./setup-dotfiles.sh next to copy the i3/polybar/dunst configs into your HOME."
     log_info "For X61 Tablet hardware (Wacom, thinkfan, TLP): run ./setup-x61.sh."
     log_info "Then reboot and pick the 'i3' session from the SDDM menu."
