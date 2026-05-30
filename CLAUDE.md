@@ -72,7 +72,7 @@ All scripts follow the same shape: `set -euo pipefail`, color-coded `log_*` help
 
 - `;` has no special meaning in i3 config. Multi-command exec uses `sh -c '...'`.
 - The `sleep 0.3` in `exec_always` guards avoid a cold-boot race where i3 fires helpers before the X session is fully initialized.
-- Panel output is **`LVDS1`** on the X61 (X11/xrandr convention — not `LVDS-1` which is a Wayland/KMS convention).
+- Panel output is **`LVDS-1`** on the X61 (with a dash). The repo uses the **modesetting** DDX driver, which exposes KMS connector names (`LVDS-1`); the dashless `LVDS1` is the old `xf86-video-intel` convention and is NOT what this setup reports. Verify with `xrandr --query | grep -w connected`.
 - Rotation button on the bezel emits **`XF86RotateWindows`** (different from X220's `XF86TaskPane`). Also bound to `Mod+Shift+R` as keyboard equivalent.
 - Multimedia/lock bindings use `wpctl` (from wireplumber) and `brightnessctl`.
 - Floating TUI popups use `alacritty --class <name>,Alacritty` + `for_window [instance="<name>"]` in i3 config.
@@ -114,7 +114,7 @@ These affect script defaults; flagging the non-obvious ones:
 - **elogind** is mandatory for SDDM session management on Void, even under X11.
 - **libspa-bluetooth** is needed for BT audio.
 - **Wacom serial digitizer (pen)** — this is a **serial ISDv4/W8001 device**, not USB. The kernel does **not** auto-attach it: `xinput` shows nothing until `inputattach --baud 19200 --w8001 /dev/ttyS0` runs and `wacom_w8001` binds the resulting serio port. `setup-x61.sh` handles this via the `wacom-digitizer` runit service (forces `serport` + `wacom_w8001` modules, then runs inputattach with a retry loop because the cold-port W8001 probe occasionally misses). Confirmed facts on this unit: port **`/dev/ttyS0`**, baud **19200**, BIOS PNP id **`WACf004`**, and the pen reports as **`Wacom Serial Penabled Pen`** (with `stylus`/`eraser` subdevices once `xf86-input-wacom` attaches) — **not** `Wacom ISD`. The X11 InputClass and `rotate_screen_x11.sh` both match the broad `Wacom` substring. If `inputattach` ever fails with `can't set device type`, the `serport` module isn't loaded. Bring the pen up without a reboot: `sudo sv up wacom-digitizer`. Only `/dev/ttyS0` is a real UART on the X61 (ttyS1-3 error on attach).
-- **LVDS1** is the X11/xrandr output name (not `LVDS-1`). Hardcoded in `rotate_screen_x11.sh`.
+- **LVDS-1** (with dash) is the xrandr output name under the modesetting driver. Hardcoded in `rotate_screen_x11.sh`.
 - **XF86RotateWindows** is the rotation button keysym on the X61 (not `XF86TaskPane` which is X220-specific). Verify with `xev` if the button doesn't respond.
 - **No IIO accelerometer** — rotation is manual-only via bezel button + script.
 - **acpi_call kernel module** for battery charge thresholds — Void has no plain `acpi_call` package, only `acpi_call-dkms`, so `setup-x61.sh` installs that plus `dkms` and `linux-headers` (DKMS builds the module against the running kernel). `/etc/modules-load.d/acpi_call.conf` loads it on next reboot. If you boot a non-default kernel series (e.g. `linux-lts`), install its matching `-headers` and run `dkms autoinstall`. Verify with `dkms status acpi_call`.

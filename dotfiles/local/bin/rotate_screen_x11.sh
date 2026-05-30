@@ -12,7 +12,7 @@
 # WACOM_DEVICE env var before calling this script, or edit it here.
 # Find the correct name with: xinput list | grep -i wacom
 
-OUTPUT="LVDS1"
+OUTPUT="LVDS-1"
 STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/x11-screen-rotation"
 # The X61 serial digitizer reports as "Wacom Serial Penabled Pen"; matching the
 # broad "Wacom" substring covers its pen/eraser subdevices and firmware variants.

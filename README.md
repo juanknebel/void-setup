@@ -148,10 +148,13 @@ zramctl ; swapon --show ; free -h
   install `xf86-video-intel` — modesetting performs better on modern kernels.
 - **picom**: must use `backend = "xrender"`. The glx backend has rendering
   bugs on the 965GM.
-- **Display output**: `LVDS1` in X11/xrandr (not `LVDS-1`).
+- **Display output**: `LVDS-1` in xrandr (with dash, modesetting driver).
 - **Rotation button**: emits `XF86RotateWindows` (verify with `xev`).
-- **Wacom ISD300 digitizer**: pen + eraser, no multitouch. Device name
-  varies by firmware — verify with `xinput list`.
+- **Wacom serial digitizer**: pen + eraser, no multitouch. It is a serial
+  ISDv4/W8001 device on `/dev/ttyS0` (PNP `WACf004`) that the kernel does
+  not auto-attach — `setup-x61.sh` runs `inputattach` via the
+  `wacom-digitizer` runit service. Pen reports as `Wacom Serial Penabled
+  Pen`. Verify with `xinput list | grep -i wacom`.
 - **HDAPS**: the accelerometer is exposed via `thinkpad_acpi` and used
   by `hdapsd` for HDD head parking. Not usable for auto-rotation.
 - **Auto-rotation is impossible** from software alone — there is no IIO
