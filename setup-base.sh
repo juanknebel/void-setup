@@ -46,15 +46,40 @@ PACKAGES=(
     pcmanfm-qt gvfs yazi
     # Qt theming — without these, Qt apps render without icons and lack a coherent palette
     breeze-icons qt6ct kvantum
-    # GTK theming — lxappearance provides a GUI to pick GTK theme/icons in i3 sessions
-    lxappearance
+    # GTK theming — lxappearance provides a GUI to pick GTK theme/icons in i3 sessions;
+    # breeze-gtk provides the actual Breeze Dark GTK2/GTK3 theme files that xprofile
+    # references via GTK_THEME=Breeze-Dark (without it GTK apps render unstyled).
+    lxappearance breeze-gtk
+    # ACPI event daemon — handles lid close, power button, battery events.
+    # Without it, closing the lid on a laptop will not trigger suspend.
+    acpid
+    # Standard XDG user directories (~/Downloads, ~/Documents, ~/Pictures, etc.).
+    # Many apps assume these exist; run `xdg-user-dirs-update` once after install.
+    xdg-user-dirs
+    # Archive tools — unzip/7zip for CLI extraction; xarchiver integrates with
+    # pcmanfm-qt right-click context menu for zip/tar/7z operations.
+    unzip 7zip xarchiver
+    # Media player — lightweight, hardware-accelerated, handles almost any format
+    mpv
+    # PDF viewer with keyboard-driven navigation; zathura-pdf-mupdf is the
+    # rendering backend (mupdf is faster and lighter than poppler on older hardware).
+    zathura zathura-pdf-mupdf
+    # Image viewer — cleaner than feh for browsing; feh stays as wallpaper setter
+    imv
+    # Clipboard manager daemon — keeps clipboard contents alive after the source
+    # app closes (X11 clipboard dies with the app without a manager).
+    xclipboard
+    # Screen color temperature — reduces blue light at night
+    redshift
+    # On-screen keyboard for tablet use without a physical keyboard
+    onboard
     # GUI apps
     firefox
 )
 # rtkit is included in PACKAGES but its runit service is NOT enabled by
 # default — it only quiets cosmetic "RTKit error: ServiceUnknown" warnings;
 # audio works without it. Enable manually with: sudo ln -s /etc/sv/rtkit /var/service/
-SERVICES=(dbus polkitd sddm bluetoothd NetworkManager)
+SERVICES=(dbus polkitd sddm bluetoothd NetworkManager acpid)
 # Old network stack services to unlink in favor of NetworkManager.
 STALE_SERVICES=(dhcpcd wpa_supplicant)
 REQUIRED_GROUPS=(video audio input storage wheel bluetooth network plugdev)
