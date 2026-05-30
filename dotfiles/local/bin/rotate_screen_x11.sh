@@ -14,7 +14,9 @@
 
 OUTPUT="LVDS1"
 STATE_FILE="${XDG_CACHE_HOME:-$HOME/.cache}/x11-screen-rotation"
-WACOM_DEVICE="${WACOM_DEVICE:-Wacom ISD}"
+# The X61 serial digitizer reports as "Wacom Serial Penabled Pen"; matching the
+# broad "Wacom" substring covers its pen/eraser subdevices and firmware variants.
+WACOM_DEVICE="${WACOM_DEVICE:-Wacom}"
 
 # Coordinate transformation matrices for each rotation.
 # These are 3x3 row-major affine matrices mapping device coords → screen coords.

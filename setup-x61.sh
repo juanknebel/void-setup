@@ -5,7 +5,10 @@ set -euo pipefail
 
 # ThinkPad X61 Tablet hardware add-on.
 # Installs and configures:
-#   - Wacom ISD300 digitizer driver (pen + eraser)
+#   - Wacom serial digitizer: xf86-input-wacom driver + inputattach service.
+#     The pen is an ISDv4/W8001 serial device on /dev/ttyS0 (PNP id WACf004);
+#     the kernel does NOT auto-attach it, so a runit service runs inputattach
+#     at boot to bring up the pen (reports as "Wacom Serial Penabled Pen").
 #   - TLP power management (battery charge thresholds, WiFi power)
 #   - thinkfan fan speed control
 #   - hdapsd HDAPS disk protection daemon (runit service authored here:
@@ -21,10 +24,13 @@ DRY_RUN=false
 # Gates whether hdapsd disk-shock protection is installed and enabled.
 HAS_HDD=""
 PACKAGES=(
-    # Wacom ISD300 pen digitizer driver for X11
+    # Wacom pen digitizer driver for X11
     xf86-input-wacom
     # libwacom: device database so libinput identifies the tablet correctly
     libwacom
+    # Provides 'inputattach', needed to bring up the serial W8001 digitizer
+    # (the kernel does not auto-attach it on the X61).
+    linuxconsoletools
     # ThinkPad power management: battery thresholds, WiFi power save, etc.
     tlp
     # Fan speed control daemon (reads /proc/acpi/ibm/thermal)
@@ -43,8 +49,9 @@ PACKAGES=(
     xournalpp
 )
 
+# wacom-digitizer (runit service authored below) runs inputattach at boot.
 # hdapsd is appended after the SSD/HDD question is resolved (see below).
-SERVICES=(tlp thinkfan)
+SERVICES=(tlp thinkfan wacom-digitizer)
 
 REQUIRED_PREREQS=(xorg-minimal libinput)
 
@@ -185,10 +192,13 @@ else
         log_warn "[Dry-Run] Would write Wacom InputClass to $WACOM_CONF"
     else
         sudo mkdir -p /etc/X11/xorg.conf.d
+        # The X61 serial digitizer reports as "Wacom Serial Penabled Pen"
+        # (not "Wacom ISD"), so match the broad "Wacom" substring. This also
+        # covers the pen/eraser subdevices and firmware-name variations.
         sudo tee "$WACOM_CONF" > /dev/null <<'EOF'
 Section "InputClass"
     Identifier  "Wacom X61 Tablet"
-    MatchProduct "Wacom ISD"
+    MatchProduct "Wacom"
     MatchDevicePath "/dev/input/event*"
     Driver      "wacom"
 EndSection
@@ -268,7 +278,66 @@ else
     fi
 fi
 
-# --- 6b. hdapsd runit service ---
+# --- 6a. Wacom serial digitizer modules at boot ---
+# inputattach needs the 'serport' line discipline; the digitizer itself is
+# driven by 'wacom_w8001'. Neither autoloads reliably on the X61, so force
+# them at boot. Loaded before the inputattach service starts.
+WACOM_MODULES_CONF="$MODULES_DIR/wacom-serial.conf"
+if [ -f "$WACOM_MODULES_CONF" ]; then
+    log_success "Wacom digitizer module-load config already present."
+else
+    if [ "$DRY_RUN" = true ]; then
+        log_warn "[Dry-Run] Would write $WACOM_MODULES_CONF (serport, wacom_w8001)"
+    else
+        sudo mkdir -p "$MODULES_DIR"
+        printf 'serport\nwacom_w8001\n' | sudo tee "$WACOM_MODULES_CONF" > /dev/null
+        log_success "Wrote $WACOM_MODULES_CONF (serport + wacom_w8001 at boot)"
+    fi
+fi
+
+# --- 6b. Wacom digitizer runit service (inputattach) ---
+# The X61 serial Wacom (ISDv4/W8001 on /dev/ttyS0) is not auto-attached by the
+# kernel. This service runs inputattach to set up the serio line so wacom_w8001
+# binds and creates the pen device. The W8001 probe occasionally misses on a
+# cold port, so retry until the pen input device appears, then keep inputattach
+# in the foreground for runit to supervise.
+WACOM_SVC="/etc/sv/wacom-digitizer"
+if [ -f "$WACOM_SVC/run" ]; then
+    log_success "Wacom digitizer runit service already present: $WACOM_SVC/run"
+else
+    if [ "$DRY_RUN" = true ]; then
+        log_warn "[Dry-Run] Would author runit service at $WACOM_SVC/run"
+    else
+        sudo mkdir -p "$WACOM_SVC"
+        sudo tee "$WACOM_SVC/run" > /dev/null <<'EOF'
+#!/bin/sh
+# X61 Tablet serial Wacom digitizer: ISDv4/W8001 on /dev/ttyS0 (PNP WACf004).
+# Pen reports as "Wacom Serial Penabled Pen"; xf86-input-wacom attaches it.
+PORT=/dev/ttyS0
+BAUD=19200
+
+modprobe serport 2>/dev/null
+modprobe wacom_w8001 2>/dev/null
+
+# Retry until wacom_w8001 binds (the cold-port probe sometimes misses).
+while true; do
+    inputattach --baud "$BAUD" --w8001 "$PORT" &
+    pid=$!
+    sleep 4
+    if grep -qiE 'wacom|penabled' /proc/bus/input/devices 2>/dev/null; then
+        wait "$pid"          # bound OK — supervise inputattach in foreground
+        exit $?              # if it dies, runit restarts the service
+    fi
+    kill "$pid" 2>/dev/null
+    sleep 2
+done
+EOF
+        sudo chmod +x "$WACOM_SVC/run"
+        log_success "Authored runit service: $WACOM_SVC/run"
+    fi
+fi
+
+# --- 6c. hdapsd runit service ---
 # The Void hdapsd package ships no service unit. Author one here so the
 # runit loop below can enable it. hdapsd autodetects all rotating disks and
 # stays in the foreground unless --background is passed — ideal for runit.
@@ -337,9 +406,11 @@ done
 
 log_success "=== X61 TABLET HARDWARE STACK COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then
-    log_warn "ACTION REQUIRED: Verify your Wacom device name before relying on screen rotation."
-    log_warn "  Run: xinput list | grep -i wacom"
-    log_warn "  If the name differs from 'Wacom ISD', set WACOM_DEVICE in ~/.local/bin/rotate_screen_x11.sh"
+    log_info "Wacom digitizer: the wacom-digitizer service runs inputattach at boot."
+    log_info "  Start it now without a reboot:  sudo sv up wacom-digitizer"
+    log_info "  Then verify the pen:            xinput list | grep -i wacom"
+    log_warn "  Expected device: 'Wacom Serial Penabled Pen'. If yours differs,"
+    log_warn "  set WACOM_DEVICE in ~/.local/bin/rotate_screen_x11.sh to match."
     log_info ""
     log_warn "acpi_call is a DKMS module: confirm it built against your kernel."
     log_warn "  Run: dkms status acpi_call   (and: modinfo acpi_call)"
