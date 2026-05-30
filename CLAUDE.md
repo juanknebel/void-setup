@@ -25,6 +25,7 @@ All setup scripts are idempotent and support `--dry-run` for previews. There are
 
 # Hardware add-ons
 ./setup-x61.sh                    # X61 Tablet hardware (Wacom, thinkfan, TLP, HDAPS, acpi_call)
+                                  #   --ssd / --hdd to skip/force hdapsd (else prompts; disk autodetected)
 ./setup-zram.sh                   # zram swap (zstd, 50%, prio 32767) + swappiness=100
 ./setup-fingerprint.sh            # fprintd + libfprint (check USB ID before relying on this)
 ```
@@ -55,7 +56,7 @@ Per-script responsibilities:
 - **`setup-base.sh`** = system foundation (needs sudo). Installs packages for NM/SDDM/audio/BT/input/fonts/shell/CLI/Qt+GTK-theming/apps, sets up runit service symlinks (including `acpid` for laptop ACPI events), configures SDDM theme to Breeze, links PipeWire system configs + user autostart, appends `QT_QPA_PLATFORMTHEME=qt6ct` to `/etc/environment`.
 - **`setup-i3.sh`** = i3 compositor additions. Validates base prerequisites first. Adds the X11 WM stack: i3, polybar, picom, dunst, rofi, flameshot, xclip, feh, xrandr, xinput, xautolock, brightnessctl, pulsemixer, bluetui.
 - **`setup-dotfiles.sh`** = user-level (no sudo). Copies payload from `dotfiles/` and `images/` into `~/.config/`, `~/.local/bin/`, `~/Pictures/`. Uses `install_file` with timestamp backups.
-- **`setup-x61.sh`** = optional X61 Tablet hardware. Installs xf86-input-wacom, libwacom, tlp, thinkfan, hdapsd, acpi_call. Writes `/etc/X11/xorg.conf.d/70-wacom.conf`, `/etc/thinkfan.conf`, `/etc/tlp.conf`, `/etc/modules-load.d/acpi_call.conf`. Enables runit services: tlp, thinkfan, hdapsd.
+- **`setup-x61.sh`** = optional X61 Tablet hardware. Installs xf86-input-wacom, libwacom, tlp, thinkfan, acpi_call-dkms (+ dkms, linux-headers), and — only on a spinning HDD — hdapsd. Writes `/etc/X11/xorg.conf.d/70-wacom.conf`, `/etc/thinkfan.conf`, `/etc/tlp.conf`, `/etc/modules-load.d/acpi_call.conf`. Enables runit services: tlp, thinkfan, and hdapsd (HDD only). Asks SSD/HDD interactively (disk type autodetected as the default), or use `--ssd`/`--hdd` to answer non-interactively; on SSD it skips hdapsd and removes any stale `/var/service/hdapsd`.
 - **`setup-zram.sh`** = optional. Same as main branch — hardware-agnostic.
 - **`setup-fingerprint.sh`** = optional. Same as main branch — verify your USB ID before relying on it.
 
@@ -115,6 +116,6 @@ These affect script defaults; flagging the non-obvious ones:
 - **LVDS1** is the X11/xrandr output name (not `LVDS-1`). Hardcoded in `rotate_screen_x11.sh`.
 - **XF86RotateWindows** is the rotation button keysym on the X61 (not `XF86TaskPane` which is X220-specific). Verify with `xev` if the button doesn't respond.
 - **No IIO accelerometer** — rotation is manual-only via bezel button + script.
-- **acpi_call kernel module** for battery charge thresholds — written to `/etc/modules-load.d/acpi_call.conf` by `setup-x61.sh`, loads on next reboot.
+- **acpi_call kernel module** for battery charge thresholds — Void has no plain `acpi_call` package, only `acpi_call-dkms`, so `setup-x61.sh` installs that plus `dkms` and `linux-headers` (DKMS builds the module against the running kernel). `/etc/modules-load.d/acpi_call.conf` loads it on next reboot. If you boot a non-default kernel series (e.g. `linux-lts`), install its matching `-headers` and run `dkms autoinstall`. Verify with `dkms status acpi_call`.
 - **thinkfan** reads `/proc/acpi/ibm/thermal` for temperatures. The conservative defaults in `setup-x61.sh` may need tuning for your specific unit.
-- **HDAPS accelerometer** is exposed under `/sys/devices/platform/thinkpad_acpi` and used by `hdapsd` for HDD head parking on shock. Not related to screen rotation.
+- **HDAPS accelerometer** is exposed under `/sys/devices/platform/thinkpad_acpi` and used by `hdapsd` for HDD head parking on shock. Not related to screen rotation. **SSD-gated:** hdapsd only protects spinning disks, so `setup-x61.sh` installs/enables it only when the machine has an HDD (asked interactively, autodetected from `/sys/block/*/queue/rotational`, or forced with `--hdd`/`--ssd`). On an SSD it would find no rotating disk and exit, causing a runit restart loop — hence the gate. The Void `hdapsd` package ships **no runit service**, so the script authors `/etc/sv/hdapsd/run` itself (`exec hdapsd`; foreground, autodetects disks).
