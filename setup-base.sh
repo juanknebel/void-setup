@@ -16,6 +16,12 @@ DRY_RUN=false
 PACKAGES=(
     # Network
     NetworkManager
+    # CPU microcode for Sandy Bridge (X220's i5-2520M). Loaded by the
+    # kernel at boot to apply Intel errata fixes.
+    intel-ucode
+    # Time synchronisation. Without an NTP daemon supervised by runit,
+    # the RTC drifts enough between reboots to break TLS handshakes.
+    chrony
     # X11 compatibility (SDDM greeter still runs in X; Xwayland for X11
     # apps under Wayland sessions). Without mesa-dri the Intel HD 3000
     # has no driver and the greeter shows a black screen.
@@ -39,23 +45,39 @@ PACKAGES=(
     # Terminal + general-purpose CLI tools
     # jq = JSON parser (used, among other things, by the Claude Code statusline).
     alacritty tmux htop wget curl git neovim fastfetch jq
-    # File managers
-    # pcmanfm-qt = primary GUI (Qt6, lightweight, integrates with Breeze)
-    # gvfs       = automount for USB drives and trash support
-    # yazi       = backup TUI, launched with `yazi` from any terminal
-    pcmanfm-qt gvfs yazi
+    # File managers + storage stack
+    # pcmanfm-qt  = primary GUI (Qt6, lightweight, integrates with Breeze)
+    # gvfs        = automount for USB drives and trash support
+    # udisks2     = block-device backend that gvfs talks to for auto-mount
+    # ntfs-3g     = read/write for NTFS-formatted USB sticks
+    # exfatprogs  = exFAT (camera SD cards, large pendrives)
+    # yazi        = backup TUI, launched with `yazi` from any terminal
+    pcmanfm-qt gvfs udisks2 ntfs-3g exfatprogs yazi
     # Qt theming — without these, Qt apps render without icons and lack a coherent palette
-    # breeze-icons = official KDE icon theme
-    # qt6ct        = central control panel for Qt6 apps (icon theme, style, palette)
-    # kvantum      = widget engine that respects SVG themes (Breeze included)
-    breeze-icons qt6ct kvantum
+    # breeze-icons   = official KDE icon theme
+    # breeze-cursors = matching Breeze cursor theme (XCURSOR_THEME=Breeze)
+    # qt6ct          = central control panel for Qt6 apps (icon theme, style, palette)
+    # kvantum        = widget engine that respects SVG themes (Breeze included)
+    breeze-icons breeze-cursors qt6ct kvantum
+    # GTK theming — Qt theming above does NOT cover GTK apps (Firefox dialogs,
+    # GIMP, file pickers in Flatpaks). Pair these with GTK_THEME=Breeze-Dark
+    # exported from /etc/environment further down in this script.
+    breeze-gtk gnome-themes-extra
+    # XDG defaults plumbing — provides `xdg-mime` and `xdg-open`; the actual
+    # default-app wiring happens in setup-dotfiles.sh (user-level mimeapps).
+    xdg-utils
+    # Default viewers used by the xdg-mime defaults set in setup-dotfiles.sh
+    # imv    = Wayland-native image viewer
+    # okular = KDE PDF/document viewer (matches Breeze theming)
+    # mpv    = video/audio player
+    imv okular mpv
     # GUI apps
     firefox
 )
 # rtkit is included in PACKAGES but its runit service is NOT enabled by
 # default — it only quiets cosmetic "RTKit error: ServiceUnknown" warnings;
 # audio works without it. Enable manually with: sudo ln -s /etc/sv/rtkit /var/service/
-SERVICES=(dbus polkitd sddm bluetoothd NetworkManager)
+SERVICES=(dbus polkitd sddm bluetoothd NetworkManager chronyd)
 # Old network stack services to unlink in favor of NetworkManager.
 STALE_SERVICES=(dhcpcd wpa_supplicant)
 REQUIRED_GROUPS=(video audio input storage wheel bluetooth network plugdev)
@@ -322,20 +344,47 @@ fi
 # scheme. Has to live in /etc/environment (not ~/.zshrc) so PAM/elogind
 # exports it BEFORE the WM starts — apps spawned from the WM don't source
 # the user's shell rc.
+ENV_FILE="/etc/environment"
 log_info "Reviewing Qt platform theme env var..."
 QT_ENV_LINE="QT_QPA_PLATFORMTHEME=qt6ct"
-QT_ENV_FILE="/etc/environment"
 
-if [ -f "$QT_ENV_FILE" ] && grep -qx "$QT_ENV_LINE" "$QT_ENV_FILE"; then
-    log_success "Qt platform theme already set in $QT_ENV_FILE."
+if [ -f "$ENV_FILE" ] && grep -qx "$QT_ENV_LINE" "$ENV_FILE"; then
+    log_success "Qt platform theme already set in $ENV_FILE."
 else
     if [ "$DRY_RUN" = true ]; then
-        log_warn "[Dry-Run] Will append '$QT_ENV_LINE' to $QT_ENV_FILE."
+        log_warn "[Dry-Run] Will append '$QT_ENV_LINE' to $ENV_FILE."
     else
-        echo "$QT_ENV_LINE" | sudo tee -a "$QT_ENV_FILE" > /dev/null
-        log_success "Wrote $QT_ENV_LINE to $QT_ENV_FILE (effective after next login)."
+        echo "$QT_ENV_LINE" | sudo tee -a "$ENV_FILE" > /dev/null
+        log_success "Wrote $QT_ENV_LINE to $ENV_FILE (effective after next login)."
     fi
 fi
+
+# --- 10. GTK + Cursor env ---
+# GTK_THEME makes apps using GTK (Firefox dialogs, GIMP, Flatpak file
+# pickers) render with Breeze-Dark instead of the default Adwaita. The
+# cursor pair (XCURSOR_THEME / XCURSOR_SIZE) replaces the tiny Adwaita
+# arrow with the Breeze cursor at a readable 24 px. All three live in
+# /etc/environment for the same reason as the Qt one above: PAM/elogind
+# needs to export them before the WM spawns its children.
+log_info "Reviewing GTK + cursor env vars..."
+THEME_ENV_LINES=(
+    "GTK_THEME=Breeze-Dark"
+    "XCURSOR_THEME=Breeze"
+    "XCURSOR_SIZE=24"
+)
+
+for line in "${THEME_ENV_LINES[@]}"; do
+    if [ -f "$ENV_FILE" ] && grep -qx "$line" "$ENV_FILE"; then
+        log_success "Theme env already set: $line"
+    else
+        if [ "$DRY_RUN" = true ]; then
+            log_warn "[Dry-Run] Will append '$line' to $ENV_FILE."
+        else
+            echo "$line" | sudo tee -a "$ENV_FILE" > /dev/null
+            log_success "Wrote $line to $ENV_FILE (effective after next login)."
+        fi
+    fi
+done
 
 log_success "=== COMMON SYSTEM BASE COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then

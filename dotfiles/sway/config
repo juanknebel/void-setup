@@ -32,6 +32,9 @@ for_window [app_id="^foot-(nmtui|bluetui|pulsemixer)$"] floating enable, resize 
 exec_always sh -c 'pkill -x swaybg; sleep 0.3; swaybg -i ~/Pictures/forest_2560x1600.jpg -m fill'
 exec_always sh -c 'pkill -x mako; sleep 0.3; mako'
 exec_always sh -c 'pkill -x waybar; sleep 0.3; waybar'
+# Persistent clipboard history. wl-paste --watch is the long-running daemon
+# that pipes every selection into `cliphist store`. Browsed with Mod+Shift+v.
+exec_always sh -c 'pkill -x wl-paste; sleep 0.3; wl-paste --watch cliphist store'
 
 # Screenshots: target dir for grim+satty captures (see Print bindings below).
 exec_always mkdir -p ~/Pictures/Screenshots
@@ -39,18 +42,20 @@ exec_always mkdir -p ~/Pictures/Screenshots
 # Audio stack: Sway does NOT honor ~/.config/autostart/*.desktop the way
 # Plasma/GNOME do, so launch PipeWire + its Pulse compatibility layer
 # explicitly. wireplumber gets auto-spawned by pipewire via the system-level
-# 10-wireplumber.conf drop-in installed by setup-system.sh.
+# 10-wireplumber.conf drop-in installed by setup-base.sh.
 exec pipewire
 exec pipewire-pulse
 
-exec swayidle -w \
-    timeout 300 'swaylock -c 232629 --ring-color 3daee9 --inside-color 31363b --text-color eff0f1' \
-    timeout 600 'loginctl suspend' \
-    before-sleep 'swaylock -c 232629 --ring-color 3daee9 --inside-color 31363b --text-color eff0f1'
+# Idle/lock policy lives in ~/.config/swayidle/config so sway only owns
+# the launch; the timeouts (lock 10 min, suspend 30 min) are defined there.
+exec swayidle -w
 
 bindsym $mod+Return exec $term
 bindsym $mod+q kill
 bindsym $mod+space exec fuzzel --background-color=232629ff --text-color=eff0f1ff --match-color=3daee9ff --selection-color=31363bff --selection-text-color=eff0f1ff --border-color=3daee9ff --border-width=2
+# Clipboard history: fuzzel as dmenu over `cliphist list`, decoded back
+# into the wl-clipboard selection. Mod+v is taken by splitv below.
+bindsym $mod+Shift+v exec sh -c 'cliphist list | fuzzel --dmenu --background-color=232629ff --text-color=eff0f1ff --match-color=3daee9ff --selection-color=31363bff --selection-text-color=eff0f1ff --border-color=3daee9ff --border-width=2 | cliphist decode | wl-copy'
 bindsym $mod+Shift+e exec ~/.local/bin/powermenu.sh
 bindsym $mod+Shift+f exec pcmanfm-qt
 
@@ -134,7 +139,7 @@ bindsym Print            exec grim - | satty -f - --output-filename ~/Pictures/S
 bindsym Shift+Print      exec grim -g "$(slurp)" - | satty -f - --output-filename ~/Pictures/Screenshots/screenshot-$(date +%Y%m%d-%H%M%S).png
 bindsym Ctrl+Shift+Print exec grim -g "$(slurp)" - | wl-copy
 
-# Multimedia keys (wpctl ships with wireplumber; brightnessctl in setup-system.sh).
+# Multimedia keys (wpctl ships with wireplumber; brightnessctl in setup-base.sh).
 # --locked: keep working while swaylock is active.
 bindsym --locked XF86AudioRaiseVolume exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+
 bindsym --locked XF86AudioLowerVolume exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-

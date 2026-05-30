@@ -14,14 +14,25 @@ PACKAGES=(
     # Sway compositor + window utilities
     sway swaybg swaylock swayidle Waybar fuzzel mako wlr-randr
     # Screenshots + clipboard (Wayland-native stack)
-    # grim = capture · slurp = region select · satty = annotate · wl-clipboard = wl-copy/wl-paste
-    grim slurp satty wl-clipboard
+    # grim     = capture · slurp = region select · satty = annotate
+    # wl-clipboard = wl-copy/wl-paste · cliphist = persistent history,
+    # surfaced via fuzzel (bound to Mod+Shift+v in dotfiles/sway/config).
+    grim slurp satty wl-clipboard cliphist
+    # XDG desktop portals — needed for screenshare in Firefox/Chromium,
+    # file pickers under Flatpaks, and any "Open With" dialog from a
+    # Wayland-only app. The -wlr backend is the wlroots-based one Sway
+    # exposes; -gtk provides the file-chooser implementation.
+    xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk
     # Terminal + virtual keyboard for tablet mode
     # foot is the secondary terminal used by waybar TUI popups (nmtui/bluetui/pulsemixer);
     # wvkbd is the on-screen keyboard bound to Mod+Shift+T.
     foot wvkbd
     # Hardware controls — TUIs invoked from waybar + CLI for backlight
     pulsemixer bluetui brightnessctl
+    # ACPI event daemon — handles lid-close and power-button events even
+    # when no Wayland session is running (e.g. SDDM greeter or a TTY).
+    # Configured below to suspend on lid close.
+    acpid
     # Tablet bezel button identification under Wayland
     wev evtest
 )
@@ -108,6 +119,51 @@ else
     else
         log_info "Installing missing Sway packages: ${MISSING_PACKAGES[*]}"
         sudo xbps-install -S "${MISSING_PACKAGES[@]}"
+    fi
+fi
+
+# --- 3. ACPI events: lid close → suspend ---
+# Supervise acpid under runit (same symlink pattern setup-base.sh uses)
+# and drop a single event handler that suspends on lid close. We use
+# `loginctl suspend` because elogind (installed by setup-base.sh) is the
+# session manager — `zzz` would also work but bypasses session locking.
+log_info "Configuring acpid lid handler..."
+ACPID_SV_TARGET="/etc/sv/acpid"
+ACPID_SV_LINK="/var/service/acpid"
+
+if [ ! -d "$ACPID_SV_TARGET" ]; then
+    log_err "Runit source service directory '$ACPID_SV_TARGET' does not exist (is acpid installed?)."
+elif [ -L "$ACPID_SV_LINK" ]; then
+    ACTUAL="$(readlink "$ACPID_SV_LINK")"
+    if [ "${ACTUAL%/}" = "$ACPID_SV_TARGET" ]; then
+        log_success "acpid service link active: $ACPID_SV_LINK -> $ACPID_SV_TARGET"
+    else
+        log_err "Symlink conflict: $ACPID_SV_LINK -> $ACTUAL (expected $ACPID_SV_TARGET)."
+    fi
+else
+    if [ "$DRY_RUN" = true ]; then
+        log_warn "[Dry-Run] Will link $ACPID_SV_LINK -> $ACPID_SV_TARGET"
+    else
+        log_info "Activating runit management link for: acpid"
+        sudo ln -sf "$ACPID_SV_TARGET" "$ACPID_SV_LINK"
+    fi
+fi
+
+ACPID_EVENTS_DIR="/etc/acpi/events"
+ACPID_LID_FILE="$ACPID_EVENTS_DIR/lid.conf"
+ACPID_LID_CONTENT='event=button/lid.* close
+action=/usr/bin/loginctl suspend'
+
+if [ -f "$ACPID_LID_FILE" ] && [ "$(cat "$ACPID_LID_FILE")" = "$ACPID_LID_CONTENT" ]; then
+    log_success "acpid lid handler already in place at $ACPID_LID_FILE."
+else
+    if [ "$DRY_RUN" = true ]; then
+        log_warn "[Dry-Run] Will write $ACPID_LID_FILE (lid close → loginctl suspend)."
+    else
+        log_info "Writing acpid lid handler to $ACPID_LID_FILE"
+        sudo install -d "$ACPID_EVENTS_DIR"
+        echo "$ACPID_LID_CONTENT" | sudo tee "$ACPID_LID_FILE" > /dev/null
+        log_success "Wrote $ACPID_LID_FILE — restart acpid (sv restart acpid) for it to pick up."
     fi
 fi
 

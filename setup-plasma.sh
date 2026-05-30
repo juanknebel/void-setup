@@ -32,9 +32,14 @@ PACKAGES=(
     # so XF86Audio* keys work with native OSD.
     kde5
     kde5-baseapps
+    # XDG desktop portals — required for screenshare in Firefox/Chromium
+    # and Flatpak file pickers under Wayland. -kde is the Plasma-aware
+    # backend; -gtk supplies the GTK file-chooser implementation that
+    # GTK apps reach for inside a Plasma session.
+    xdg-desktop-portal xdg-desktop-portal-kde xdg-desktop-portal-gtk
 )
 
-# Prerequisites assumed already installed by setup-system.sh:
+# Prerequisites assumed already installed by setup-base.sh:
 #   elogind, xorg-minimal, mesa-dri, xorg-server-xwayland, sddm,
 #   pipewire, wireplumber, dbus, polkit.
 REQUIRED_PREREQS=(elogind mesa-dri xorg-server-xwayland sddm dbus polkit)
@@ -54,7 +59,7 @@ log_err() { echo -e "${RED}[ERROR]${NC} $1"; }
 show_help() {
     echo "Usage: $0 [OPTIONS]"
     echo "Installs the KDE Plasma desktop stack alongside Sway on the X220."
-    echo "Run setup-system.sh FIRST — this script assumes its prerequisites"
+    echo "Run setup-base.sh FIRST — this script assumes its prerequisites"
     echo "(elogind, mesa-dri, Xwayland, sddm, pipewire, dbus, polkit) are present."
     echo ""
     echo "Options:"
@@ -80,7 +85,7 @@ else
 fi
 
 # --- 1. Prerequisite Validation ---
-# Plasma Wayland needs the Wayland session stack from setup-system.sh.
+# Plasma Wayland needs the Wayland session stack from setup-base.sh.
 # Without elogind specifically, KWin Wayland cannot create its socket
 # ("Could not create wayland socket" in wayland-session.log).
 log_info "Validating system prerequisites..."
@@ -95,7 +100,7 @@ if [ ${#MISSING_PREREQS[@]} -eq 0 ]; then
     log_success "All prerequisites are present."
 else
     log_err "Missing prerequisites: ${MISSING_PREREQS[*]}"
-    log_err "Run ./setup-system.sh first to install the base stack."
+    log_err "Run ./setup-base.sh first to install the base stack."
     exit 1
 fi
 

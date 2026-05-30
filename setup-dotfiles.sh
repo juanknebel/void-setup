@@ -90,9 +90,9 @@ ensure_executable() {
 
 log_info "Installing local Breeze Dark configurations from $DOTFILES_DIR..."
 
-# Ensure target dirs exist (setup-system.sh also creates most of these, but
+# Ensure target dirs exist (setup-base.sh also creates most of these, but
 # this script must be runnable on its own).
-ensure_dir ~/.config/sway ~/.config/waybar ~/.config/mako ~/.config/foot ~/.config/alacritty ~/.local/bin ~/Pictures
+ensure_dir ~/.config/sway ~/.config/waybar ~/.config/mako ~/.config/foot ~/.config/alacritty ~/.config/swayidle ~/.local/bin ~/Pictures
 
 # --- 1. Sway ---
 install_file "$DOTFILES_DIR/sway/config" ~/.config/sway/config
@@ -114,6 +114,12 @@ install_file "$DOTFILES_DIR/local/bin/powermenu.sh"         ~/.local/bin/powerme
 ensure_executable ~/.local/bin/rotate_screen_twm.sh ~/.local/bin/powermenu.sh
 log_success "Tablet rotation engine and safe power configurations installed."
 
+# --- 4b. Swayidle (lock + suspend timeouts) ---
+# sway only launches `swayidle -w` now — the policy (lock @ 10 min,
+# suspend @ 30 min, before-sleep lock) lives in this file.
+install_file "$DOTFILES_DIR/swayidle/config" ~/.config/swayidle/config
+log_success "Swayidle policy installed."
+
 # --- 5. Shell environment (zsh + Starship) ---
 # chsh is intentionally NOT performed — the system shell stays bash, and
 # Alacritty/foot launch zsh on their own.
@@ -128,3 +134,42 @@ log_success "Alacritty terminal configuration installed."
 # --- 7. Wallpapers (sway picks them up via swaybg in its config) ---
 install_file "$IMAGES_DIR/forest_2560x1600.jpg" ~/Pictures/forest_2560x1600.jpg
 log_success "Wallpapers installed to ~/Pictures."
+
+# --- 8. XDG MIME defaults ---
+# `xdg-mime default APP MIME` writes ~/.config/mimeapps.list. We set the
+# pairings that match the apps installed by setup-base.sh: Firefox for
+# web/HTML, pcmanfm-qt for directories, imv for images, okular for PDFs,
+# mpv for audio/video. Skipped silently if the corresponding .desktop is
+# not found (xdg-mime would just refuse the binding anyway).
+log_info "Configuring XDG MIME defaults..."
+
+# Map of "desktop file" -> "space-separated list of MIME types".
+declare -A MIME_DEFAULTS=(
+    [firefox.desktop]="x-scheme-handler/http x-scheme-handler/https text/html application/xhtml+xml"
+    [pcmanfm-qt.desktop]="inode/directory"
+    [imv.desktop]="image/jpeg image/png image/gif image/webp image/bmp image/tiff image/x-portable-pixmap"
+    [org.kde.okular.desktop]="application/pdf"
+    [mpv.desktop]="video/mp4 video/x-matroska video/webm video/quicktime video/x-msvideo audio/mpeg audio/flac audio/ogg audio/wav audio/x-vorbis+ogg"
+)
+
+if ! command -v xdg-mime > /dev/null 2>&1; then
+    log_warn "xdg-mime not found in PATH — install xdg-utils via setup-base.sh first."
+else
+    for desktop in "${!MIME_DEFAULTS[@]}"; do
+        # Look the .desktop up the same way xdg-mime would (XDG_DATA_DIRS).
+        if [ ! -r "/usr/share/applications/$desktop" ] \
+           && [ ! -r "/usr/local/share/applications/$desktop" ] \
+           && [ ! -r "$HOME/.local/share/applications/$desktop" ]; then
+            log_warn "Skipping $desktop — not found in any XDG applications dir."
+            continue
+        fi
+        for mime in ${MIME_DEFAULTS[$desktop]}; do
+            if [ "$DRY_RUN" = true ]; then
+                log_warn "[Dry-Run] Would run: xdg-mime default $desktop $mime"
+            else
+                xdg-mime default "$desktop" "$mime"
+            fi
+        done
+        log_success "MIME defaults set for $desktop."
+    done
+fi
