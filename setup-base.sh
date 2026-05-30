@@ -55,10 +55,12 @@ PACKAGES=(
     pcmanfm-qt gvfs udisks2 ntfs-3g exfatprogs yazi
     # Qt theming — without these, Qt apps render without icons and lack a coherent palette
     # breeze-icons   = official KDE icon theme
-    # breeze-cursors = matching Breeze cursor theme (XCURSOR_THEME=Breeze)
+    # breeze-qt6     = Breeze visual style; also ships the Breeze cursor theme
+    #                  in /usr/share/icons/breeze_cursors (XCURSOR_THEME below).
+    #                  No standalone breeze-cursors package exists on Void.
     # qt6ct          = central control panel for Qt6 apps (icon theme, style, palette)
     # kvantum        = widget engine that respects SVG themes (Breeze included)
-    breeze-icons breeze-cursors qt6ct kvantum
+    breeze-icons breeze-qt6 qt6ct kvantum
     # GTK theming — Qt theming above does NOT cover GTK apps (Firefox dialogs,
     # GIMP, file pickers in Flatpaks). Pair these with GTK_THEME=Breeze-Dark
     # exported from /etc/environment further down in this script.
@@ -141,6 +143,23 @@ for group in "${REQUIRED_GROUPS[@]}"; do
 done
 
 # --- 2. Package Existence & Installation Validation ---
+# intel-ucode (Intel CPU microcode) lives in void-repo-nonfree, which is not
+# enabled on a default install. Install + sync the nonfree repo first so the
+# package resolves in the loop below. The repo metapackage itself ships in the
+# free 'current' repo; the second sync pulls the freshly-added nonfree index.
+log_info "Ensuring void-repo-nonfree is enabled (required for intel-ucode)..."
+if xbps-query void-repo-nonfree > /dev/null 2>&1; then
+    log_success "void-repo-nonfree already installed."
+else
+    if [ "$DRY_RUN" = true ]; then
+        log_warn "[Dry-Run] Will install void-repo-nonfree + sync repos (provides intel-ucode)."
+    else
+        log_info "Installing void-repo-nonfree and syncing repository index..."
+        sudo xbps-install -Sy void-repo-nonfree
+        sudo xbps-install -S
+    fi
+fi
+
 log_info "Checking Void Linux binary repositories via xbps..."
 MISSING_PACKAGES=()
 for pkg in "${PACKAGES[@]}"; do
@@ -363,13 +382,16 @@ fi
 # GTK_THEME makes apps using GTK (Firefox dialogs, GIMP, Flatpak file
 # pickers) render with Breeze-Dark instead of the default Adwaita. The
 # cursor pair (XCURSOR_THEME / XCURSOR_SIZE) replaces the tiny Adwaita
-# arrow with the Breeze cursor at a readable 24 px. All three live in
-# /etc/environment for the same reason as the Qt one above: PAM/elogind
-# needs to export them before the WM spawns its children.
+# arrow with the Breeze cursor at a readable 24 px. XCURSOR_THEME must
+# match the on-disk theme directory: breeze-qt6 installs the Breeze Dark
+# cursors under /usr/share/icons/breeze_cursors (there is no "Breeze"
+# cursor dir on Void). All three live in /etc/environment for the same
+# reason as the Qt one above: PAM/elogind needs to export them before
+# the WM spawns its children.
 log_info "Reviewing GTK + cursor env vars..."
 THEME_ENV_LINES=(
     "GTK_THEME=Breeze-Dark"
-    "XCURSOR_THEME=Breeze"
+    "XCURSOR_THEME=breeze_cursors"
     "XCURSOR_SIZE=24"
 )
 
