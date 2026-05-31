@@ -3,12 +3,16 @@
 # Exit immediately if a command exits with a non-zero status.
 set -euo pipefail
 
-# Installs voidsplash, a minimal boot splash for runit that draws PNG
-# frames on the framebuffer via fbv (no Plymouth, no initramfs changes).
-# Clones jaylesworth/voidsplash from GitHub, installs the binary, wires
-# the runit service, and installs our custom splash frame
+# Installs a minimal framebuffer boot splash for runit: a single PNG drawn
+# via fbv (no Plymouth, no initramfs changes). Wires a runit service with
+# our own run script and installs our custom splash frame
 # (images/void-0.png: the official void-logo.svg centered on a solid
 # black background, rendered to 1280x800 for the X220 panel).
+#
+# The run script draws the frame until SDDM is up and then stops the
+# service, so it never repaints a TTY switched to after boot. (The upstream
+# jaylesworth/voidsplash binary looped forever against a 'nodm' target we do
+# not use, piling up processes that painted over TTYs — hence our own script.)
 #
 # The optional --grub-quiet flag also appends `quiet console=tty2` to
 # GRUB_CMDLINE_LINUX_DEFAULT so kernel messages are silenced and any
@@ -18,10 +22,7 @@ set -euo pipefail
 # --- Configuration ---
 DRY_RUN=false
 GRUB_QUIET=false
-PACKAGES=(fbv git)
-REPO_URL="https://github.com/jaylesworth/voidsplash.git"
-CLONE_DIR="/tmp/voidsplash"
-BIN_DEST="/bin/voidsplash"
+PACKAGES=(fbv)
 SERVICE_DIR="/etc/sv/voidsplash"
 SERVICE_LINK="/var/service/voidsplash"
 THEME_DIR="/etc/voidsplash"
@@ -100,43 +101,37 @@ else
     fi
 fi
 
-# --- 2. Clone voidsplash ---
-log_info "Reviewing voidsplash sources at $CLONE_DIR..."
-if [ -d "$CLONE_DIR/.git" ]; then
-    log_success "Clone already present at $CLONE_DIR — skipping clone."
-else
-    if [ "$DRY_RUN" = true ]; then
-        log_warn "[Dry-Run] Will clone $REPO_URL into $CLONE_DIR."
-    else
-        log_info "Cloning $REPO_URL into $CLONE_DIR..."
-        git clone "$REPO_URL" "$CLONE_DIR"
-    fi
-fi
-
-# --- 3. Install Binary ---
-log_info "Reviewing voidsplash binary at $BIN_DEST..."
-if [ -x "$BIN_DEST" ]; then
-    log_success "voidsplash binary already installed at $BIN_DEST."
-elif [ "$DRY_RUN" = true ]; then
-    log_warn "[Dry-Run] Will copy $CLONE_DIR/voidsplash -> $BIN_DEST and chmod +x."
-elif [ ! -f "$CLONE_DIR/voidsplash" ]; then
-    log_err "Expected $CLONE_DIR/voidsplash not found — clone may have failed."
-    exit 1
-else
-    sudo install -m 0755 "$CLONE_DIR/voidsplash" "$BIN_DEST"
-    log_success "Installed $BIN_DEST"
-fi
-
-# --- 4. Runit Service ---
+# --- 2. Runit Service ---
+# Always (re)write the run script — it is generated content we own, so
+# rewriting keeps existing installs in sync with fixes here.
 log_info "Reviewing runit service at $SERVICE_DIR..."
-if [ -f "$SERVICE_DIR/run" ]; then
-    log_success "Service already exists at $SERVICE_DIR."
-elif [ "$DRY_RUN" = true ]; then
-    log_warn "[Dry-Run] Will create $SERVICE_DIR/run invoking $BIN_DEST."
+if [ "$DRY_RUN" = true ]; then
+    log_warn "[Dry-Run] Will write $SERVICE_DIR/run (draw frame until sddm is up, then self-stop)."
 else
     sudo mkdir -p "$SERVICE_DIR"
-    # Minimal runit run script — voidsplash itself loops over the frames.
-    printf '#!/bin/sh\nexec %s\n' "$BIN_DEST" | sudo tee "$SERVICE_DIR/run" > /dev/null
+    sudo tee "$SERVICE_DIR/run" > /dev/null <<'RUNSCRIPT'
+#!/bin/sh
+# Framebuffer boot splash for runit. Draws the frame in /etc/voidsplash/
+# until the display manager is up, then stops this service so it never
+# repaints a TTY the user later switches to.
+FRAME=/etc/voidsplash/void-0.png
+DM=sddm
+export SVDIR=/var/service
+
+# Hide the text cursor on tty1 while the splash is shown.
+printf '\033[?25l' > /dev/tty1 2>/dev/null
+
+# fbv quits when it reads 'q' on stdin; the sleep gives it time to render.
+# Redraw the frame until the display manager reaches the 'run' state.
+while ! sv status "$DM" 2>/dev/null | grep -q '^run'; do
+    { sleep 0.2; echo q; } | fbv -cike "$FRAME" >/dev/null 2>&1
+done
+
+# Display manager is up: stop painting. Ask runit to take this service down,
+# and sleep as a guard so we neither respawn nor repaint while it does.
+sv down voidsplash 2>/dev/null
+exec sleep infinity
+RUNSCRIPT
     sudo chmod +x "$SERVICE_DIR/run"
     log_success "Wrote $SERVICE_DIR/run"
 fi
@@ -153,10 +148,9 @@ else
     log_success "Linked $SERVICE_LINK -> $SERVICE_DIR"
 fi
 
-# --- 5. Theme Frame ---
-# Voidsplash plays PNG frames named void-0.png, void-1.png, ... from
-# $THEME_DIR. We ship a single custom frame ($SPLASH_FRAME) instead of the
-# clone's void-theme samples: the void logo on a solid black background.
+# --- 3. Theme Frame ---
+# The run script draws void-0.png from $THEME_DIR. We ship a single custom
+# frame ($SPLASH_FRAME): the void logo on a solid black background.
 log_info "Reviewing splash frames at $THEME_DIR..."
 if compgen -G "$THEME_DIR/void-*.png" > /dev/null; then
     log_success "Frames already present in $THEME_DIR."
@@ -170,7 +164,7 @@ else
     log_success "Installed custom splash frame to $THEME_DIR/void-0.png."
 fi
 
-# --- 6. Optional GRUB Quiet (--grub-quiet) ---
+# --- 4. Optional GRUB Quiet (--grub-quiet) ---
 # Appends `quiet console=tty2` to GRUB_CMDLINE_LINUX_DEFAULT: `quiet`
 # silences most kernel messages, and console=tty2 sends whatever remains
 # (kernel + runit boot output) to tty2 instead of painting over the splash.
@@ -204,6 +198,6 @@ fi
 
 log_success "=== VOIDSPLASH SETUP COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then
-    log_info "Reboot to see the splash. To replace the bundled frame with your own,"
-    log_info "drop void-0.png, void-1.png, ... into $THEME_DIR (1280x800 for the X220 panel)."
+    log_info "Reboot to see the splash. To replace the frame with your own,"
+    log_info "drop void-0.png into $THEME_DIR (1280x800 for the X220 panel)."
 fi
