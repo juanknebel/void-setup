@@ -30,7 +30,6 @@ The scripts are deliberately modular so you can build either a Sway box, a Plasm
 ./setup-zram.sh                   # zram swap (zstd, 50%, prio 32767) + swappiness=100
                                   #   --with-swapfile also creates /swapfile (pri=10) as OOM backstop
 ./setup-fingerprint.sh            # fprintd + libfprint, probes UPEK reader (147e:2016)
-./setup-virtualkb.sh              # Maliit for Plasma; --enable-sddm also wires greeter vkbd
 ./setup-voidsplash.sh             # framebuffer boot splash via runit
                                   #   --grub-quiet also adds console=tty2 to GRUB cmdline
 ```
@@ -53,7 +52,7 @@ setup-sway.sh                     setup-plasma.sh   (pick one or both)
 setup-dotfiles.sh                 [Plasma GUI config]
        ↓
 [optional add-ons: setup-zram.sh, setup-fingerprint.sh,
-                   setup-virtualkb.sh, setup-voidsplash.sh]
+                   setup-voidsplash.sh]
 ```
 
 Per-script responsibilities:
@@ -64,7 +63,6 @@ Per-script responsibilities:
 - **`setup-dotfiles.sh`** = user-level (no sudo). Copies payload from `dotfiles/` and `images/` into `~/.config/`, `~/.local/bin/`, `~/Pictures/`. Sway-focused (the dotfiles assume Sway; Plasma users configure via GUI). Uses a mirror-of-destination layout where `install_file` takes absolute src paths from `$DOTFILES_DIR` or `$IMAGES_DIR`; backups go to `<path>.bak.<timestamp>`.
 - **`setup-zram.sh`** = optional. Installs zramen, writes `/etc/sv/zramen/conf` via heredoc (zstd / 50% / priority 32767), links the runit service, writes `vm.swappiness=100`. `--with-swapfile` additionally creates `/swapfile` at priority 10 as an anti-OOM backstop (zram fills first).
 - **`setup-fingerprint.sh`** = optional UPEK setup. Installs fprintd/libfprint, probes USB ID `147e:2016`, reports enrollment status. PAM integration intentionally NOT scripted — manual opt-in with mandatory `sufficient` semantics (CVE-2024-37408).
-- **`setup-virtualkb.sh`** = optional Maliit for Plasma sessions. `--enable-sddm` flag also writes `/etc/sddm.conf.d/10-virtualkbd.conf` for greeter vkbd (kept opt-in because SDDM tweaks have hung the X220 in the past).
 - **`setup-voidsplash.sh`** = optional boot splash. Clones jaylesworth/voidsplash, installs binary to `/bin/voidsplash`, creates runit service, copies bundled sample frames to `/etc/voidsplash/`. `--grub-quiet` flag also appends `console=tty2` to `GRUB_CMDLINE_LINUX_DEFAULT` so kernel logs don't paint over the splash.
 
 All scripts follow the same shape: `set -euo pipefail`, color-coded `log_*` helpers, `--dry-run`/`--help` flags, idempotent xbps package check loop, sudo keep-alive in non-dry-run mode. There is **intentional duplication** of these helpers across scripts (no shared library) — keeps each script standalone runnable.

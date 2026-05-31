@@ -411,5 +411,5 @@ done
 log_success "=== COMMON SYSTEM BASE COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then
     log_info "Next: run ./setup-sway.sh and/or ./setup-plasma.sh, then ./setup-dotfiles.sh."
-    log_info "Optional: ./setup-zram.sh ./setup-fingerprint.sh ./setup-virtualkb.sh ./setup-voidsplash.sh"
+    log_info "Optional: ./setup-zram.sh ./setup-fingerprint.sh ./setup-voidsplash.sh"
 fi
