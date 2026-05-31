@@ -82,7 +82,7 @@ self-contained and idempotent.
 |---|---|---|
 | `setup-zram.sh` | zram compressed swap (zstd, 50%, prio 32767) + `vm.swappiness=100` | `--with-swapfile` also creates `/swapfile` (prio=10) as OOM backstop |
 | `setup-fingerprint.sh` | fprintd + libfprint, probes UPEK reader (`147e:2016`), reports enrollment | — |
-| `setup-voidsplash.sh` | Framebuffer boot splash via runit (no Plymouth, no initramfs changes) | `--grub-quiet` also adds `console=tty2` to GRUB so kernel logs render off-splash |
+| `setup-voidsplash.sh` | Framebuffer boot splash via runit (no Plymouth, no initramfs changes) | `--grub-quiet` also adds `quiet console=tty2` to GRUB so kernel logs are silenced and any remainder renders off-splash |
 
 ---
 

@@ -6,12 +6,13 @@ set -euo pipefail
 # Installs voidsplash, a minimal boot splash for runit that draws PNG
 # frames on the framebuffer via fbv (no Plymouth, no initramfs changes).
 # Clones jaylesworth/voidsplash from GitHub, installs the binary, wires
-# the runit service, and installs our custom Breeze-themed splash frame
-# (images/void-0.png: the official void-logo.svg centered on the Breeze
-# Dark View bg #232629, rendered to 1280x800 for the X220 panel).
+# the runit service, and installs our custom splash frame
+# (images/void-0.png: the official void-logo.svg centered on a solid
+# black background, rendered to 1280x800 for the X220 panel).
 #
-# The optional --grub-quiet flag also appends `console=tty2` to
-# GRUB_CMDLINE_LINUX_DEFAULT so kernel messages do not paint over the
+# The optional --grub-quiet flag also appends `quiet console=tty2` to
+# GRUB_CMDLINE_LINUX_DEFAULT so kernel messages are silenced and any
+# remaining boot output lands on tty2 instead of painting over the
 # splash. That step is opt-in because it touches GRUB.
 
 # --- Configuration ---
@@ -47,8 +48,9 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  -d, --dry-run     Validate without modifying anything."
-    echo "  --grub-quiet      Also append 'console=tty2' to GRUB_CMDLINE_LINUX_DEFAULT"
-    echo "                    so kernel logs render on tty2 instead of over the splash."
+    echo "  --grub-quiet      Also append 'quiet console=tty2' to GRUB_CMDLINE_LINUX_DEFAULT"
+    echo "                    so kernel logs are silenced and any remainder render on tty2"
+    echo "                    instead of over the splash."
     echo "                    Touches /etc/default/grub and regenerates grub.cfg."
     echo "  -h, --help        Show this help message."
 }
@@ -154,7 +156,7 @@ fi
 # --- 5. Theme Frame ---
 # Voidsplash plays PNG frames named void-0.png, void-1.png, ... from
 # $THEME_DIR. We ship a single custom frame ($SPLASH_FRAME) instead of the
-# clone's void-theme samples, so the splash matches the Breeze Dark theme.
+# clone's void-theme samples: the void logo on a solid black background.
 log_info "Reviewing splash frames at $THEME_DIR..."
 if compgen -G "$THEME_DIR/void-*.png" > /dev/null; then
     log_success "Frames already present in $THEME_DIR."
@@ -169,28 +171,35 @@ else
 fi
 
 # --- 6. Optional GRUB Quiet (--grub-quiet) ---
-# Adds console=tty2 to GRUB_CMDLINE_LINUX_DEFAULT so kernel messages
-# render on a separate VT instead of painting over the splash.
+# Appends `quiet console=tty2` to GRUB_CMDLINE_LINUX_DEFAULT: `quiet`
+# silences most kernel messages, and console=tty2 sends whatever remains
+# (kernel + runit boot output) to tty2 instead of painting over the splash.
 if [ "$GRUB_QUIET" = true ]; then
     GRUB_FILE="/etc/default/grub"
     log_info "Reviewing GRUB cmdline at $GRUB_FILE..."
     if [ ! -f "$GRUB_FILE" ]; then
         log_err "$GRUB_FILE not found — is GRUB the active bootloader?"
-    elif grep -q 'GRUB_CMDLINE_LINUX_DEFAULT=.*console=tty2' "$GRUB_FILE"; then
-        log_success "GRUB cmdline already contains console=tty2."
-    elif [ "$DRY_RUN" = true ]; then
-        log_warn "[Dry-Run] Will append 'console=tty2' to GRUB_CMDLINE_LINUX_DEFAULT and run grub-mkconfig."
     else
-        ts=$(date +%Y%m%d%H%M%S)
-        sudo cp -a "$GRUB_FILE" "$GRUB_FILE.bak.$ts"
-        log_info "Backed up $GRUB_FILE to $GRUB_FILE.bak.$ts"
-        # Insert console=tty2 just before the closing quote of the existing value.
-        sudo sed -i 's/^\(GRUB_CMDLINE_LINUX_DEFAULT="[^"]*\)"/\1 console=tty2"/' "$GRUB_FILE"
-        sudo grub-mkconfig -o /boot/grub/grub.cfg
-        log_success "Added console=tty2 and regenerated grub.cfg."
+        # Append only the tokens that are missing, so the step is idempotent.
+        ADD=()
+        grep -q 'GRUB_CMDLINE_LINUX_DEFAULT=.*\bquiet\b' "$GRUB_FILE" || ADD+=("quiet")
+        grep -q 'GRUB_CMDLINE_LINUX_DEFAULT=.*console=tty2' "$GRUB_FILE" || ADD+=("console=tty2")
+        if [ ${#ADD[@]} -eq 0 ]; then
+            log_success "GRUB cmdline already contains quiet and console=tty2."
+        elif [ "$DRY_RUN" = true ]; then
+            log_warn "[Dry-Run] Will append '${ADD[*]}' to GRUB_CMDLINE_LINUX_DEFAULT and run grub-mkconfig."
+        else
+            ts=$(date +%Y%m%d%H%M%S)
+            sudo cp -a "$GRUB_FILE" "$GRUB_FILE.bak.$ts"
+            log_info "Backed up $GRUB_FILE to $GRUB_FILE.bak.$ts"
+            # Insert the missing tokens just before the closing quote of the value.
+            sudo sed -i "s/^\(GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\)\"/\1 ${ADD[*]}\"/" "$GRUB_FILE"
+            sudo grub-mkconfig -o /boot/grub/grub.cfg
+            log_success "Added '${ADD[*]}' and regenerated grub.cfg."
+        fi
     fi
 else
-    log_info "GRUB cmdline NOT touched (re-run with --grub-quiet to push kernel logs to tty2)."
+    log_info "GRUB cmdline NOT touched (re-run with --grub-quiet to quiet kernel logs and push them to tty2)."
 fi
 
 log_success "=== VOIDSPLASH SETUP COMPLETE ==="

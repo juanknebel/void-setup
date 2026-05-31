@@ -31,7 +31,7 @@ The scripts are deliberately modular so you can build either a Sway box, a Plasm
                                   #   --with-swapfile also creates /swapfile (pri=10) as OOM backstop
 ./setup-fingerprint.sh            # fprintd + libfprint, probes UPEK reader (147e:2016)
 ./setup-voidsplash.sh             # framebuffer boot splash via runit
-                                  #   --grub-quiet also adds console=tty2 to GRUB cmdline
+                                  #   --grub-quiet also adds quiet console=tty2 to GRUB cmdline
 ```
 
 Every script supports `-d/--dry-run` and `-h/--help`.
@@ -63,7 +63,7 @@ Per-script responsibilities:
 - **`setup-dotfiles.sh`** = user-level (no sudo). Copies payload from `dotfiles/` and `images/` into `~/.config/`, `~/.local/bin/`, `~/Pictures/`. Sway-focused (the dotfiles assume Sway; Plasma users configure via GUI). Uses a mirror-of-destination layout where `install_file` takes absolute src paths from `$DOTFILES_DIR` or `$IMAGES_DIR`; backups go to `<path>.bak.<timestamp>`.
 - **`setup-zram.sh`** = optional. Installs zramen, writes `/etc/sv/zramen/conf` via heredoc (zstd / 50% / priority 32767), links the runit service, writes `vm.swappiness=100`. `--with-swapfile` additionally creates `/swapfile` at priority 10 as an anti-OOM backstop (zram fills first).
 - **`setup-fingerprint.sh`** = optional UPEK setup. Installs fprintd/libfprint, probes USB ID `147e:2016`, reports enrollment status. PAM integration intentionally NOT scripted — manual opt-in with mandatory `sufficient` semantics (CVE-2024-37408).
-- **`setup-voidsplash.sh`** = optional boot splash. Clones jaylesworth/voidsplash (for the binary only), installs it to `/bin/voidsplash`, creates the runit service, and installs the repo's custom frame `images/void-0.png` to `/etc/voidsplash/` (the official void-logo on the Breeze Dark View bg `#232629`, 1280x800 for the X220 panel) instead of the clone's sample frames. `--grub-quiet` flag also appends `console=tty2` to `GRUB_CMDLINE_LINUX_DEFAULT` so kernel logs don't paint over the splash.
+- **`setup-voidsplash.sh`** = optional boot splash. Clones jaylesworth/voidsplash (for the binary only), installs it to `/bin/voidsplash`, creates the runit service, and installs the repo's custom frame `images/void-0.png` to `/etc/voidsplash/` (the official void-logo on a solid black background, 1280x800 for the X220 panel) instead of the clone's sample frames. `--grub-quiet` flag also appends `quiet console=tty2` to `GRUB_CMDLINE_LINUX_DEFAULT` so kernel logs are silenced and any remainder lands on tty2 instead of painting over the splash.
 
 All scripts follow the same shape: `set -euo pipefail`, color-coded `log_*` helpers, `--dry-run`/`--help` flags, idempotent xbps package check loop, sudo keep-alive in non-dry-run mode. There is **intentional duplication** of these helpers across scripts (no shared library) — keeps each script standalone runnable.
 
