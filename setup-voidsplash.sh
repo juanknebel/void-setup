@@ -6,7 +6,9 @@ set -euo pipefail
 # Installs voidsplash, a minimal boot splash for runit that draws PNG
 # frames on the framebuffer via fbv (no Plymouth, no initramfs changes).
 # Clones jaylesworth/voidsplash from GitHub, installs the binary, wires
-# the runit service, and copies the bundled void-theme sample frames.
+# the runit service, and installs our custom Breeze-themed splash frame
+# (images/void-0.png: the official void-logo.svg centered on the Breeze
+# Dark View bg #232629, rendered to 1280x800 for the X220 panel).
 #
 # The optional --grub-quiet flag also appends `console=tty2` to
 # GRUB_CMDLINE_LINUX_DEFAULT so kernel messages do not paint over the
@@ -15,13 +17,17 @@ set -euo pipefail
 # --- Configuration ---
 DRY_RUN=false
 GRUB_QUIET=false
-PACKAGES=(fbv git ImageMagick)
+PACKAGES=(fbv git)
 REPO_URL="https://github.com/jaylesworth/voidsplash.git"
 CLONE_DIR="/tmp/voidsplash"
 BIN_DEST="/bin/voidsplash"
 SERVICE_DIR="/etc/sv/voidsplash"
 SERVICE_LINK="/var/service/voidsplash"
 THEME_DIR="/etc/voidsplash"
+
+# Custom splash frame shipped with this repo (pre-rendered, see header).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SPLASH_FRAME="$SCRIPT_DIR/images/void-0.png"
 
 # Colors for output formatting
 NC='\033[0m'
@@ -145,20 +151,21 @@ else
     log_success "Linked $SERVICE_LINK -> $SERVICE_DIR"
 fi
 
-# --- 5. Theme Frames ---
+# --- 5. Theme Frame ---
 # Voidsplash plays PNG frames named void-0.png, void-1.png, ... from
-# $THEME_DIR. The bundled void-theme/ inside the clone has sample frames.
+# $THEME_DIR. We ship a single custom frame ($SPLASH_FRAME) instead of the
+# clone's void-theme samples, so the splash matches the Breeze Dark theme.
 log_info "Reviewing splash frames at $THEME_DIR..."
 if compgen -G "$THEME_DIR/void-*.png" > /dev/null; then
     log_success "Frames already present in $THEME_DIR."
+elif [ ! -f "$SPLASH_FRAME" ]; then
+    log_warn "$SPLASH_FRAME not found — drop your own void-*.png into $THEME_DIR manually."
 elif [ "$DRY_RUN" = true ]; then
-    log_warn "[Dry-Run] Will copy $CLONE_DIR/void-theme/*.png -> $THEME_DIR"
-elif [ ! -d "$CLONE_DIR/void-theme" ]; then
-    log_warn "$CLONE_DIR/void-theme not found — drop your own void-*.png into $THEME_DIR manually."
+    log_warn "[Dry-Run] Will copy $SPLASH_FRAME -> $THEME_DIR/void-0.png"
 else
     sudo mkdir -p "$THEME_DIR"
-    sudo cp "$CLONE_DIR"/void-theme/*.png "$THEME_DIR/" 2>/dev/null || true
-    log_success "Copied bundled sample frames to $THEME_DIR."
+    sudo install -m 0644 "$SPLASH_FRAME" "$THEME_DIR/void-0.png"
+    log_success "Installed custom splash frame to $THEME_DIR/void-0.png."
 fi
 
 # --- 6. Optional GRUB Quiet (--grub-quiet) ---
@@ -188,6 +195,6 @@ fi
 
 log_success "=== VOIDSPLASH SETUP COMPLETE ==="
 if [ "$DRY_RUN" = false ]; then
-    log_info "Reboot to see the splash. To replace the sample frames with your own,"
+    log_info "Reboot to see the splash. To replace the bundled frame with your own,"
     log_info "drop void-0.png, void-1.png, ... into $THEME_DIR (1280x800 for the X220 panel)."
 fi
