@@ -106,29 +106,32 @@ fi
 # rewriting keeps existing installs in sync with fixes here.
 log_info "Reviewing runit service at $SERVICE_DIR..."
 if [ "$DRY_RUN" = true ]; then
-    log_warn "[Dry-Run] Will write $SERVICE_DIR/run (draw frame until sddm is up, then self-stop)."
+    log_warn "[Dry-Run] Will write $SERVICE_DIR/run (draw frame until the greeter is up, then self-stop)."
 else
     sudo mkdir -p "$SERVICE_DIR"
     sudo tee "$SERVICE_DIR/run" > /dev/null <<'RUNSCRIPT'
 #!/bin/sh
-# Framebuffer boot splash for runit. Draws the frame in /etc/voidsplash/
-# until the display manager is up, then stops this service so it never
-# repaints a TTY the user later switches to.
+# Framebuffer boot splash for runit. Draws the frame in /etc/voidsplash/ and
+# keeps redrawing it until the SDDM greeter's X server is up (Xorg grabs its
+# own VT, so the splash is no longer visible). Then it stops this service so
+# it never repaints a TTY the user later switches to.
 FRAME=/etc/voidsplash/void-0.png
-DM=sddm
 export SVDIR=/var/service
 
-# Hide the text cursor on tty1 while the splash is shown.
+# Hide the text cursor while the splash is shown.
 printf '\033[?25l' > /dev/tty1 2>/dev/null
 
-# fbv quits when it reads 'q' on stdin; the sleep gives it time to render.
-# Redraw the frame until the display manager reaches the 'run' state.
-while ! sv status "$DM" 2>/dev/null | grep -q '^run'; do
+# runit starts services in parallel, so draw FIRST and test after: SDDM is
+# often already up on the first iteration, and a plain `while ! up; do draw`
+# would then never draw at all. fbv quits when it reads 'q' on stdin; the
+# sleep lets it render each pass. Stop once Xorg (the greeter) has taken over.
+while :; do
     { sleep 0.2; echo q; } | fbv -cike "$FRAME" >/dev/null 2>&1
+    pgrep -x Xorg >/dev/null 2>&1 && break
 done
 
-# Display manager is up: stop painting. Ask runit to take this service down,
-# and sleep as a guard so we neither respawn nor repaint while it does.
+# Greeter is up: stop painting. Ask runit to take this service down, and
+# sleep as a guard so we neither respawn nor repaint while it does.
 sv down voidsplash 2>/dev/null
 exec sleep infinity
 RUNSCRIPT
